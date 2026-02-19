@@ -45,6 +45,8 @@ function _init()
   player.mirror = false
   player.onground = true
   player.bob_t = 0
+  player.max_jumps = 1
+  player.jumps_left = 0
 
   updatecollisionbox(player)
   screensize = {
@@ -60,13 +62,21 @@ function _init()
   
   -- pixels of downward speed applied each frame
   grav = 1.0 / tilesize
-  maxgrav = 7.5 / tilesize
+  grav_up   = 0.8 / tilesize   -- gravity while rising
+  grav_down = 0.7 / tilesize  -- gravity while falling
+  maxgrav = 5 / tilesize
   
   -- horizontal movement speed
   movspeed = 1.5 / tilesize
   
   -- jump speed
-  jumpspeed = 10.5 / tilesize
+  -- jumpspeed = 11 / tilesize
+  jump_v = 9.5 / tilesize       -- initial upward velocity (try 10-12)
+
+  jump_hold_max = 0.2           -- extra lift frames while holding jump (try 4-8)
+  jump_cut_mult = 0.9         -- how hard we cut jump on release (0.35-0.7)
+
+  player.jump_hold = 0
   
   -- jump buffering
   jumpbuffer = 3 -- number of frames allowed to buffer jumps
@@ -84,6 +94,10 @@ end
 
 function _update()
   player.speed.x = 0
+
+  player.max_jumps = (skin <= 2 and 2 or 1)      -- skins 1-2: double jump
+  player.jumps_left = mid(0, player.jumps_left, player.max_jumps - 1) -- clamp if skin changes mid-air
+
   player.bob_t += 1
   jumpframes = min(jumpbuffer + 1, jumpframes + 1)
   fallingframes = min(jumpgrace + 1, fallingframes + 1)
@@ -99,13 +113,16 @@ function _update()
     jumpframes = 0
   end
   
-  if player.onground or fallingframes <= jumpgrace then
-    if jumpframes <= jumpbuffer then
+  if jumpframes <= jumpbuffer then
+    -- ground / coyote jump
+    if player.onground or fallingframes <= jumpgrace then
       jump(player)
-    end
-  else
-    if player.jumping and not btn(4) then
-      player.jumping = false
+      player.jumps_left = player.max_jumps - 1
+
+    -- air jump (double jump only when max_jumps=2)
+    elseif player.jumps_left > 0 then
+      jump(player)
+      player.jumps_left -= 1
     end
   end
 
@@ -192,31 +209,40 @@ end
 function jump(entity)
   entity.onground = false
   entity.jumping = true
-  entity.curjumpspeed = jumpspeed
+  entity.jump_hold = jump_hold_max
+  entity.speed.y = -jump_v
   jumpframes = jumpbuffer + 1
 end
 
 function applyphysics(entity)
   local speed = entity.speed
 
-  if entity.jumping or speed.y < 0 then
-    if entity.jumping then
-      entity.curjumpspeed -= jumpspeed / 10
+  -- natural jump physics using velocity + gravity
+  if speed.y < 0 then
+    -- rising
+    if entity.jumping and btn(4) and entity.jump_hold > 0 then
+      -- holding jump: lighter gravity for a higher jump
+      speed.y += grav_up
+      entity.jump_hold -= 1
     else
-      entity.curjumpspeed = 0
-    end
-    
-    speed.y = -entity.curjumpspeed
-    
-    if entity.curjumpspeed <= 0 then
+      -- released or out of hold time: cut jump once, then normal rise gravity
+      if entity.jumping and not btn(4) then
+        speed.y *= jump_cut_mult
+      end
       entity.jumping = false
+      speed.y += grav_up
     end
   else
-    speed.y = min(maxgrav, speed.y + grav)
+    -- falling
+    entity.jumping = false
+    speed.y = min(maxgrav, speed.y + grav_down)
   end
-  
-  local wasonground = entity.onground -- we need to know if the entity started on the ground for slopes
+
+  speed.y = min(maxgrav, speed.y)
+
+  local wasonground = entity.onground
   entity.onground = false
+
   
   -- increase precision by applying physics in smaller steps
   -- the more steps, the faster things can go without going through terrain
@@ -270,8 +296,11 @@ function applyphysics(entity)
           speed.y = 0
           entity.y = tiletop
           entity.onground = true
+          entity.jump_hold = 0
           entity.jumping = false
           fallingframes = 0
+          entity.jumps_left = entity.max_jumps - 1
+
         end
       end
     end
@@ -281,6 +310,8 @@ function applyphysics(entity)
     -- wall collisions
     for tile in gettiles(entity, "horizontal") do
       if tile.solid and not tile.slope then
+        entity.jumps_left = entity.max_jumps - 1
+
         if entity.x < tile.x + 0.5 then
           -- push out to the left
           entity.x = tile.x - entity.collision.size.horizontal.width / 2
@@ -300,6 +331,7 @@ function applyphysics(entity)
         entity.y = tile.y
         entity.onground = true
         entity.jumping = false
+        entity.jump_hold = 0
         fallingframes = 0
       end
     end
