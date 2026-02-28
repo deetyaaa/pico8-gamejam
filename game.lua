@@ -33,7 +33,7 @@ function _init()
   }
   player.anims = {
     standing = { 64 },
-    jumping = { 128, 70, 128},
+    jumping = { 130, 70, 130},
     gliding = { 128 },
     walking = {66, 68, 70, 68, 66, 64}
   }
@@ -47,6 +47,9 @@ function _init()
   player.bob_t = 0
   player.max_jumps = 1
   player.jumps_left = 0
+  player.air_grant = false -- prevents re-granting multiple times in same airtime
+
+
 
   updatecollisionbox(player)
   screensize = {
@@ -58,23 +61,34 @@ function _init()
     height = 32
   }
 
-  
+
+  -- coins
+  coin_sprite = 33
+  coin_margin = 0.1 -- shrinks coin hitbox
+  coins = {
+    {x=12, y=22},
+    {x=14, y=11},
+    {x=18, y=9},
+  }
+  coin_count = 0
+
+  -- pickup radius (in tiles).\
+  coin_pickup_r = 0.6
   
   -- pixels of downward speed applied each frame
-  grav = 1.0 / tilesize
-  grav_up   = 0.8 / tilesize   -- gravity while rising
-  grav_down = 0.7 / tilesize  -- gravity while falling
-  maxgrav = 5 / tilesize
+  grav_up   = 0.75 / tilesize   -- gravity while rising
+  grav_down = 0.8 / tilesize  -- gravity while falling
+  maxgrav = 6 / tilesize
   
   -- horizontal movement speed
   movspeed = 1.5 / tilesize
   
   -- jump speed
   -- jumpspeed = 11 / tilesize
-  jump_v = 9.5 / tilesize       -- initial upward velocity (try 10-12)
+  jump_v = 8.5 / tilesize       -- initial upward velocity (try 10-12)
 
-  jump_hold_max = 0.2           -- extra lift frames while holding jump (try 4-8)
-  jump_cut_mult = 0.9         -- how hard we cut jump on release (0.35-0.7)
+  jump_hold_max = 4      -- extra lift frames while holding jump (try 4-8)
+  jump_cut_mult = 0.45         -- how hard we cut jump on release (0.35-0.7)
 
   player.jump_hold = 0
   
@@ -92,11 +106,53 @@ function _init()
   cam = { x = 0, y = 0 }
 end
 
+function update_coins()
+  -- use the player's "horizontal" body box (good general hitbox)
+  local b = player.collision.box.horizontal
+
+  for i=#coins,1,-1 do
+    local c = coins[i]
+
+    -- coin is a 1x1 tile box in tile coords
+    local cl = c.x - coin_margin
+    local ct = c.y - coin_margin
+    local cr = c.x + 1 + coin_margin
+    local cb = c.y + 1 + coin_margin
+
+    -- overlap test
+    if b.right > cl and b.left < cr and b.bottom > ct and b.top < cb then
+      sfx(8)
+      deli(coins, i)
+      coin_count += 1
+      
+    end
+    
+  end
+end
+
 function _update()
   player.speed.x = 0
 
+  local old_max = player.max_jumps
   player.max_jumps = (skin <= 2 and 2 or 1)      -- skins 1-2: double jump
-  player.jumps_left = mid(0, player.jumps_left, player.max_jumps - 1) -- clamp if skin changes mid-air
+
+  if player.onground then
+    -- landing resets everything
+    player.air_grant = false
+    player.jumps_left = player.max_jumps - 1
+  else
+    -- if we SWITCH to double-jump while airborne, grant 1 jump (once per airtime)
+    if player.max_jumps > old_max and not player.air_grant then
+      player.jumps_left = max(player.jumps_left, player.max_jumps - 1) -- becomes 1
+      player.air_grant = true
+    end
+
+    -- if we SWITCH back to single-jump while airborne, clamp to 0
+    if player.max_jumps == 1 then
+      player.jumps_left = 0
+    end
+  end
+
 
   player.bob_t += 1
   jumpframes = min(jumpbuffer + 1, jumpframes + 1)
@@ -133,6 +189,7 @@ function _update()
   end
 
   applyphysics(player)
+  update_coins()
   animate(player)
   
   wasjumppressed = btn(4)
@@ -228,6 +285,7 @@ function applyphysics(entity)
       -- released or out of hold time: cut jump once, then normal rise gravity
       if entity.jumping and not btn(4) then
         speed.y *= jump_cut_mult
+        entity.jump_hold = 0
       end
       entity.jumping = false
       speed.y += grav_up
@@ -296,6 +354,8 @@ function applyphysics(entity)
           speed.y = 0
           entity.y = tiletop
           entity.onground = true
+          entity.air_grant = false
+          entity.jumps_left = entity.max_jumps - 1
           entity.jump_hold = 0
           entity.jumping = false
           fallingframes = 0
@@ -330,6 +390,8 @@ function applyphysics(entity)
         speed.y = 0
         entity.y = tile.y
         entity.onground = true
+        entity.air_grant = false
+        entity.jumps_left = entity.max_jumps - 1
         entity.jumping = false
         entity.jump_hold = 0
         fallingframes = 0
@@ -420,23 +482,26 @@ function updatecollisionbox(entity)
 end
 
 function _draw()
+  
   camera(cam.x, cam.y)
 
   pal()
-  palt(0, false)
-  palt(14, true)
+  palt(0, true)
 
   cls(1)
   map(0, 0, 0, 0)
+  palt(13, true)
 
-  palt(14, false)
+  for c in all(coins) do
+    spr(coin_sprite, c.x*tilesize, c.y*tilesize)
+  end
 
-
-  palt(4, true)
-
-  local bob = sin(player.bob_t/30) * 0.5
+  local bob = sin(player.bob_t/30) * 0.0002 
   local spr_id = player.anim[player.frame] + skin_offsets[skin]
   spr(spr_id, player.x * tilesize - 8, player.y * tilesize - 16 + bob, 2, 2, player.mirror)
 
   palt(7,false)
+  camera()
+  print( coin_count, 13, 5, 7)
+  spr(34, 3, 3)
 end
