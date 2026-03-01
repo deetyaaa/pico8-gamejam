@@ -13,7 +13,7 @@ function _init()
   skin = 1
   skin_timer = 0
   skin_period = 60
-  skin_offsets = { 0, 8, 32, 40 }
+  -- skin_offsets = { 0, 8, 32, 40 }
   -- skin_offsets = { 0, 0, 0, 0 }
 
 
@@ -33,9 +33,9 @@ function _init()
   }
   player.anims = {
     standing = { 64 },
-    jumping = { 130, 70, 130},
-    gliding = { 128 },
-    walking = {66, 68, 70, 68, 66, 64}
+    jumping = { 96, 98, 100, 98},
+    gliding = { 100 },
+    walking = {66, 68, 70, 68}
   }
 
   player.animt = 0
@@ -50,6 +50,14 @@ function _init()
   player.air_grant = false -- prevents re-granting multiple times in same airtime
 
 
+  -- rain
+  rain = {}
+  rain = {}
+  rain_sprite = 49
+  rain_max = 120
+  rain_spawn = 3
+  rain_spd_min = 1.75 -- px/frame (component speed)
+  rain_spd_max = 2.8 
 
   updatecollisionbox(player)
   screensize = {
@@ -60,6 +68,12 @@ function _init()
     width = 53,
     height = 32
   }
+  rooms = {
+    [1] = { mapx=0,  mapy=0,  w=32, h=32, spawnx=3,  spawny=13, right=2 },
+    [2] = { mapx=16, mapy=0,  w=32, h=32, spawnx=2,  spawny=13, left=1  },
+    -- add more rooms by changing mapx/mapy/w/h to match your map layout
+  }
+
 
 
   -- coins
@@ -104,6 +118,19 @@ function _init()
   -- screen bounding box beyond which the camera will snap back to the player
   camerasnap = { left = 40, top = 16, right = screensize.width - 40, bottom = screensize.height - 48 }
   cam = { x = 0, y = 0 }
+
+  load_room(1)
+end
+
+function load_room(id)
+  room_id = id
+  room = rooms[id]
+  player.x = room.spawnx
+  player.y = room.spawny
+  player.speed.x = 0
+  player.speed.y = 0
+  cam.x = 0
+  cam.y = 0
 end
 
 function update_coins()
@@ -130,7 +157,46 @@ function update_coins()
   end
 end
 
-function _update()
+function update_rain()
+  -- spawn from top + left so the diagonal flow fills the screen
+  for i=1,rain_spawn do
+    if #rain < rain_max then
+      local spd = rain_spd_min + rnd(rain_spd_max - rain_spd_min) -- same for x and y
+      local x,y
+
+      if rnd(1) < 0.5 then
+        -- from top
+        x = cam.x + rnd(screensize.width)
+        y = cam.y - 8
+      else
+        -- from left
+        x = cam.x - 8
+        y = cam.y + rnd(screensize.height)
+      end
+
+      add(rain, { x=x, y=y, vx=spd, vy=spd }) -- 45° down-right
+    end
+  end
+
+  -- move + remove
+  for i=#rain,1,-1 do
+    local d = rain[i]
+    d.x += d.vx
+    d.y += d.vy
+
+    if d.y > cam.y + screensize.height + 16 or d.x > cam.x + screensize.width + 16 then
+      deli(rain, i)
+    end
+  end
+end
+
+function draw_rain()
+  for d in all(rain) do
+    spr(rain_sprite, d.x, d.y)
+  end
+end
+
+function game_update()
   player.speed.x = 0
 
   local old_max = player.max_jumps
@@ -191,6 +257,16 @@ function _update()
   applyphysics(player)
   update_coins()
   animate(player)
+
+  if player.x > room.w and room.right then
+    load_room(room.right)
+    player.x = 0.5
+  end
+
+  if player.x < 0 and room.left then
+    load_room(room.left)
+    player.x = room.w - 0.5
+  end
   
   wasjumppressed = btn(4)
 
@@ -215,12 +291,16 @@ function _update()
     cam.y += (center - cam.y) / 6
   end
 
-  local maxcamx, maxcamy = 
-    max(0, mapsize.width * tilesize - screensize.width), 
-    max(0, mapsize.height * tilesize - screensize.height)
-    
+  -- local maxcamx, maxcamy = 
+  --   max(0, mapsize.width * tilesize - screensize.width), 
+  --   max(0, mapsize.height * tilesize - screensize.height)
+  local maxcamx = max(0, room.w * tilesize - screensize.width)
+  local maxcamy = max(0, room.h * tilesize - screensize.height)
+  
   cam.x = mid(0, cam.x, maxcamx)
   cam.y = mid(0, cam.y, maxcamy)
+
+  update_rain()
 end
 
 function animate(entity)
@@ -228,7 +308,7 @@ function animate(entity)
     if entity.speed.y < 0 then          -- going up -> flap
       setanim(entity,"jumping")
     else                           -- falling / apex -> no flap
-      setanim(entity,"gliding")
+      setanim(entity,"jumping")
     end
   elseif entity.speed.x ~= 0 then
     setanim(entity,"walking")
@@ -241,7 +321,7 @@ function animate(entity)
 
   local rate = 12          -- standing slower
   if entity.anim == entity.anims.walking then rate = 6 end
-  if entity.anim == entity.anims.jumping then rate = 1.75 end  -- faster (shows all jump frames)
+  if entity.anim == entity.anims.jumping then rate = 2 end  -- faster (shows all jump frames)
   if entity.anim == entity.anims.gliding then rate = 9999 end
 
   -- end
@@ -425,7 +505,7 @@ function gettiles(entity, boxtype)
       return nil
     end
     
-    local sprite = mget(x, y)
+    local sprite = mget(room.mapx + x, room.mapy + y)
     local ret = { sprite = sprite, x = x, y = y }
 
     local flags = fget(sprite)
@@ -481,27 +561,56 @@ function updatecollisionbox(entity)
   }
 end
 
-function _draw()
+function game_draw()
   
   camera(cam.x, cam.y)
 
-  pal()
-  palt(0, true)
+  -- pal()
+  
 
   cls(1)
-  map(0, 0, 0, 0)
+  palt(0, true)
+  palt(13, false)
+
+  map(room.mapx, room.mapy, 0, 0, room.w, room.h)
   palt(13, true)
+
+  draw_rain()
 
   for c in all(coins) do
     spr(coin_sprite, c.x*tilesize, c.y*tilesize)
   end
 
   local bob = sin(player.bob_t/30) * 0.0002 
-  local spr_id = player.anim[player.frame] + skin_offsets[skin]
+  local spr_id = player.anim[player.frame] 
   spr(spr_id, player.x * tilesize - 8, player.y * tilesize - 16 + bob, 2, 2, player.mirror)
 
-  palt(7,false)
+  -- palt(7,false)
   camera()
   print( coin_count, 13, 5, 7)
   spr(34, 3, 3)
+  palt(0, false)
+end
+
+-------------------------------------------------------------------------
+
+scene="game" -- or "title"
+
+function _update()
+  if scene=="title" then title_update()
+  else game_update() end
+end
+
+function _draw()
+  if scene=="title" then title_draw()
+  else game_draw() end
+end
+
+function title_update()
+  if btnp(4) then scene="game" end
+end
+
+function title_draw()
+  cls(1)
+  print("press ❎", 50, 60, 7)
 end
