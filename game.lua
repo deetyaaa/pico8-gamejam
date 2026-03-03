@@ -68,11 +68,23 @@ function _init()
     width = 53,
     height = 32
   }
+  -- rooms = {
+  --   [1] = { mapx=0,  mapy=0,  w=32, h=32, spawnx=3,  spawny=13, right=2 },
+  --   [2] = { mapx=16, mapy=0,  w=32, h=32, spawnx=2,  spawny=13, left=1  },
+  --   -- add more rooms by changing mapx/mapy/w/h to match your map layout
+  -- }
+
   rooms = {
-    [1] = { mapx=0,  mapy=0,  w=32, h=32, spawnx=3,  spawny=13, right=2 },
-    [2] = { mapx=16, mapy=0,  w=32, h=32, spawnx=2,  spawny=13, left=1  },
-    -- add more rooms by changing mapx/mapy/w/h to match your map layout
+    [1] = { mapx=0,  mapy=0, w=32, h=32, spawnx=3, spawny=13 },
+    [2] = { mapx=16, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
+    -- [3] = { mapx=32, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
+    -- add more rooms here...
   }
+
+  for i=1,#rooms do
+    rooms[i].left  = (i>1) and (i-1) or nil
+    rooms[i].right = (i<#rooms) and (i+1) or nil
+  end
 
 
 
@@ -99,7 +111,7 @@ function _init()
   
   -- jump speed
   -- jumpspeed = 11 / tilesize
-  jump_v = 8.5 / tilesize       -- initial upward velocity (try 10-12)
+  jump_v = 7.5 / tilesize       -- initial upward velocity (try 10-12)
 
   jump_hold_max = 4      -- extra lift frames while holding jump (try 4-8)
   jump_cut_mult = 0.45         -- how hard we cut jump on release (0.35-0.7)
@@ -122,15 +134,113 @@ function _init()
   load_room(1)
 end
 
-function load_room(id)
+
+bird_top_color = 12
+bird_bottom_color = 8
+
+skins = {
+  -- double-jump (BLUE-BLUE)
+  dj1 = { {bird_src_a, 12}, {bird_src_b, 12} },  
+
+  -- double-jump (BLUE-RED)
+  dj2 = { {bird_src_a, 12}, {bird_src_b, 8} },  
+
+
+  -- single-jump (RED-RED)
+  sj1 = { {bird_src_a, 8}, {bird_src_b, 8} },  
+
+  -- single-jump (RED-BLUE)
+  sj2 = { {bird_src_a, 8}, {bird_src_b, 12} }, 
+}
+  
+function draw_player()
+  local rx = room_px()
+  local ry = room_py()
+  local bob = sin(player.bob_t/30) * 0.0002
+  local spr_id = player.anim[player.frame]
+
+  if player.max_jumps == 2 then
+    apply_skin(skins.dj)
+  else
+    apply_skin(skins.sj)
+  end
+
+  palt(13, true)
+
+  spr(spr_id,
+    rx + player.x * tilesize - 8,
+    ry + player.y * tilesize - 16 + bob,
+    2, 2, player.mirror
+  )
+  
+  pal() -- IMPORTANT: reset so coins/map/rain aren't recolored
+end
+
+  
+
+function apply_skin(map)
+  pal()                -- reset first so swaps don't stack
+  for p in all(map) do
+    pal(p[1], p[2], 1) -- sprite palette swap
+  end
+end
+
+function room_px()
+  return room.mapx * tilesize
+end
+
+function room_py()
+  return room.mapy * tilesize
+end 
+
+function set_room(id)
   room_id = id
   room = rooms[id]
+end
+
+
+function load_room(id)
+  set_room(id)
   player.x = room.spawnx
   player.y = room.spawny
   player.speed.x = 0
   player.speed.y = 0
-  cam.x = 0
-  cam.y = 0
+end
+
+function enter_room(id, side)
+  -- set_room(id)
+  -- player.speed.x = 0
+  -- player.speed.y = 0
+
+  -- -- keep current y so height is consistent
+  -- if side == "right" then
+  --   player.x = 0.5
+  -- elseif side == "left" then
+  --   player.x = room.w - 0.5
+  -- end
+
+  local old_rx = room_px()
+  local old_ry = room_py()
+
+  set_room(id)
+
+  local new_rx = room_px()
+  local new_ry = room_py()
+
+  -- keep camera aligned relative to world when changing rooms
+  cam.x += (new_rx - old_rx)
+  cam.y += (new_ry - old_ry)
+
+  player.speed.x = 0
+  player.speed.y = 0
+
+  if side == "right" then
+    player.x = 0.5
+  elseif side == "left" then
+    player.x = room.w - 0.5
+  end
+
+  updatecollisionbox(player)
 end
 
 function update_coins()
@@ -259,26 +369,28 @@ function game_update()
   animate(player)
 
   if player.x > room.w and room.right then
-    load_room(room.right)
-    player.x = 0.5
+    enter_room(room.right, "right")
   end
 
   if player.x < 0 and room.left then
-    load_room(room.left)
-    player.x = room.w - 0.5
+    enter_room(room.left, "left")
   end
   
   wasjumppressed = btn(4)
 
   -- update camera position
-  local screenx, screeny = player.x * tilesize - cam.x, player.y * tilesize - cam.y
-  
+  -- local screenx, screeny = player.x * tilesize - cam.x, player.y * tilesize - cam.y
+  local px = room_px() + player.x * tilesize
+  local py = room_py() + player.y * tilesize
+  local screenx, screeny = px - cam.x, py - cam.y
+
+
   if screenx < camerasnap.left then
     cam.x += screenx - camerasnap.left
   elseif screenx > camerasnap.right then
     cam.x += screenx - camerasnap.right
   else
-    local center = player.x * tilesize - screensize.width / 2
+    local center = px - screensize.width / 2
     cam.x += (center - cam.x) / 6
   end
   
@@ -287,18 +399,24 @@ function game_update()
   elseif screeny > camerasnap.bottom then
     cam.y += screeny - camerasnap.bottom
   elseif player.onground then
-    local center = player.y * tilesize - screensize.height / 2
+    local center = py - screensize.height / 2
     cam.y += (center - cam.y) / 6
   end
 
-  -- local maxcamx, maxcamy = 
-  --   max(0, mapsize.width * tilesize - screensize.width), 
-  --   max(0, mapsize.height * tilesize - screensize.height)
-  local maxcamx = max(0, room.w * tilesize - screensize.width)
-  local maxcamy = max(0, room.h * tilesize - screensize.height)
+
+  -- local maxcamx = max(0, room.w * tilesize - screensize.width)
+  -- local maxcamy = max(0, room.h * tilesize - screensize.height)
   
-  cam.x = mid(0, cam.x, maxcamx)
-  cam.y = mid(0, cam.y, maxcamy)
+  -- cam.x = mid(0, cam.x, maxcamx)
+  -- cam.y = mid(0, cam.y, maxcamy)
+
+  local mincamx = room_px()
+  local mincamy = room_py()
+  local maxcamx = room_px() + max(0, room.w * tilesize - screensize.width)
+  local maxcamy = room_py() + max(0, room.h * tilesize - screensize.height)
+
+  cam.x = mid(mincamx, cam.x, maxcamx)
+  cam.y = mid(mincamy, cam.y, maxcamy)
 
   update_rain()
 end
@@ -572,18 +690,32 @@ function game_draw()
   palt(0, true)
   palt(13, false)
 
-  map(room.mapx, room.mapy, 0, 0, room.w, room.h)
+  -- map(room.mapx, room.mapy, 0, 0, room.w, room.h)
+  map(room.mapx, room.mapy, room_px(), room_py(), room.w, room.h)
   palt(13, true)
 
   draw_rain()
 
+  local rx = room.mapx * tilesize
+  local ry = room.mapy * tilesize
+
   for c in all(coins) do
-    spr(coin_sprite, c.x*tilesize, c.y*tilesize)
+    spr(coin_sprite, rx + c.x*tilesize, ry + c.y*tilesize)
   end
+
+  local bob = sin(player.bob_t/30) * 0.0002
+  local spr_id = player.anim[player.frame]
+  -- spr(spr_id,
+  --   rx + player.x * tilesize - 8,
+  --   ry + player.y * tilesize - 16 + bob,
+  --   2, 2, player.mirror
+  -- )
+  draw_player()
+
+
 
   local bob = sin(player.bob_t/30) * 0.0002 
   local spr_id = player.anim[player.frame] 
-  spr(spr_id, player.x * tilesize - 8, player.y * tilesize - 16 + bob, 2, 2, player.mirror)
 
   -- palt(7,false)
   camera()
