@@ -13,9 +13,6 @@ function _init()
   skin = 1
   skin_timer = 0
   skin_period = 60
-  -- skin_offsets = { 0, 8, 32, 40 }
-  -- skin_offsets = { 0, 0, 0, 0 }
-
 
   player = { x = 3, y = 13 }
   player.speed = { x = 0, y = 0 }
@@ -37,7 +34,6 @@ function _init()
     gliding = { 100 },
     walking = {66, 68, 70, 68}
   }
-
   player.animt = 0
   player.anim = player.anims.standing
   player.animframes = 0
@@ -68,11 +64,6 @@ function _init()
     width = 53,
     height = 32
   }
-  -- rooms = {
-  --   [1] = { mapx=0,  mapy=0,  w=32, h=32, spawnx=3,  spawny=13, right=2 },
-  --   [2] = { mapx=16, mapy=0,  w=32, h=32, spawnx=2,  spawny=13, left=1  },
-  --   -- add more rooms by changing mapx/mapy/w/h to match your map layout
-  -- }
 
   rooms = {
     [1] = { mapx=0,  mapy=0, w=32, h=32, spawnx=3, spawny=13 },
@@ -81,12 +72,10 @@ function _init()
     -- add more rooms here...
   }
 
-  for i=1,#rooms do
+  for i = 1, #rooms do
     rooms[i].left  = (i>1) and (i-1) or nil
     rooms[i].right = (i<#rooms) and (i+1) or nil
   end
-
-
 
   -- coins
   coin_sprite = 33
