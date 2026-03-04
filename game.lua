@@ -13,6 +13,12 @@ function _init()
   skin = 1
   skin_timer = 0
   skin_period = 60
+  
+  bird_top_color = 12
+  bird_bottom_color = 8
+  bird_top_outline = 1
+  bird_bottom_outline = 2
+
 
   player = { x = 3, y = 13 }
   player.speed = { x = 0, y = 0 }
@@ -84,10 +90,11 @@ function _init()
     {x=12, y=22},
     {x=14, y=11},
     {x=18, y=9},
+    {x=2, y=24},
   }
   coin_count = 0
 
-  -- pickup radius (in tiles).\
+  -- pickup radius (in tiles).
   coin_pickup_r = 0.6
   
   -- pixels of downward speed applied each frame
@@ -124,35 +131,13 @@ function _init()
 end
 
 
-bird_top_color = 12
-bird_bottom_color = 8
 
-skins = {
-  -- double-jump (BLUE-BLUE)
-  dj1 = { {bird_src_a, 12}, {bird_src_b, 12} },  
-
-  -- double-jump (BLUE-RED)
-  dj2 = { {bird_src_a, 12}, {bird_src_b, 8} },  
-
-
-  -- single-jump (RED-RED)
-  sj1 = { {bird_src_a, 8}, {bird_src_b, 8} },  
-
-  -- single-jump (RED-BLUE)
-  sj2 = { {bird_src_a, 8}, {bird_src_b, 12} }, 
-}
   
 function draw_player()
   local rx = room_px()
   local ry = room_py()
   local bob = sin(player.bob_t/30) * 0.0002
   local spr_id = player.anim[player.frame]
-
-  if player.max_jumps == 2 then
-    apply_skin(skins.dj)
-  else
-    apply_skin(skins.sj)
-  end
 
   palt(13, true)
 
@@ -162,17 +147,42 @@ function draw_player()
     2, 2, player.mirror
   )
   
-  pal() -- IMPORTANT: reset so coins/map/rain aren't recolored
+  pal()
 end
 
-  
+function apply_skin_by_id(s)
+  pal() -- reset first
 
-function apply_skin(map)
-  pal()                -- reset first so swaps don't stack
-  for p in all(map) do
-    pal(p[1], p[2], 1) -- sprite palette swap
+  if s==1 then
+    -- dj1: BLUE-BLUE
+    pal(bird_top_color,   12)
+    pal(bird_bottom_color,12)
+    pal(bird_top_outline,  1)
+    pal(bird_bottom_outline, 1)
+
+  elseif s==2 then
+    -- dj2: BLUE-RED
+    pal(bird_top_color,   12)
+    pal(bird_bottom_color, 8)
+    pal(bird_top_outline,  1)
+    pal(bird_bottom_outline, 2)
+
+  elseif s==3 then
+    -- sj1: RED-RED
+    pal(bird_top_color,    8)
+    -- pal(bird_bottom_color, 8)
+    pal(bird_top_outline,  2)
+    -- pal(bird_bottom_outline, 2)
+
+  else
+    -- sj2: RED-BLUE (skin==4)
+    pal(bird_top_color,    8)
+    pal(bird_bottom_color,12)
+    pal(bird_top_outline,  2)
+    pal(bird_bottom_outline, 1)
   end
 end
+  
 
 function room_px()
   return room.mapx * tilesize
@@ -197,16 +207,6 @@ function load_room(id)
 end
 
 function enter_room(id, side)
-  -- set_room(id)
-  -- player.speed.x = 0
-  -- player.speed.y = 0
-
-  -- -- keep current y so height is consistent
-  -- if side == "right" then
-  --   player.x = 0.5
-  -- elseif side == "left" then
-  --   player.x = room.w - 0.5
-  -- end
 
   local old_rx = room_px()
   local old_ry = room_py()
@@ -392,12 +392,6 @@ function game_update()
     cam.y += (center - cam.y) / 6
   end
 
-
-  -- local maxcamx = max(0, room.w * tilesize - screensize.width)
-  -- local maxcamy = max(0, room.h * tilesize - screensize.height)
-  
-  -- cam.x = mid(0, cam.x, maxcamx)
-  -- cam.y = mid(0, cam.y, maxcamy)
 
   local mincamx = room_px()
   local mincamy = room_py()
@@ -672,9 +666,6 @@ function game_draw()
   
   camera(cam.x, cam.y)
 
-  -- pal()
-  
-
   cls(1)
   palt(0, true)
   palt(13, false)
@@ -689,22 +680,27 @@ function game_draw()
   local ry = room.mapy * tilesize
 
   for c in all(coins) do
+    palt(0,true)    
     spr(coin_sprite, rx + c.x*tilesize, ry + c.y*tilesize)
   end
+  pal()
+
 
   local bob = sin(player.bob_t/30) * 0.0002
   local spr_id = player.anim[player.frame]
-  -- spr(spr_id,
-  --   rx + player.x * tilesize - 8,
-  --   ry + player.y * tilesize - 16 + bob,
-  --   2, 2, player.mirror
-  -- )
-  draw_player()
 
+  apply_skin_by_id(skin)
+  palt(13, true)
 
+  spr(spr_id,
+    rx + player.x * tilesize - 8,
+    ry + player.y * tilesize - 16 + bob,
+    2, 2, player.mirror
+  )
+  -- draw_player()
 
-  local bob = sin(player.bob_t/30) * 0.0002 
-  local spr_id = player.anim[player.frame] 
+  pal()
+
 
   -- palt(7,false)
   camera()
