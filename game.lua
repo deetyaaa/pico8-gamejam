@@ -71,11 +71,20 @@ function _init()
     height = 32
   }
 
+  local sw = screensize.width / tilesize  -- 16
+  local sh = screensize.height / tilesize -- 16
+
+  -- rooms = {
+  --   [1] = { mapx=0,  mapy=0, w=32, h=32, spawnx=3, spawny=13 },
+  --   [2] = { mapx=16, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
+  --   -- [3] = { mapx=32, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
+  --   -- add more rooms here...
+  -- }
+
   rooms = {
-    [1] = { mapx=0,  mapy=0, w=32, h=32, spawnx=3, spawny=13 },
-    [2] = { mapx=16, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
-    -- [3] = { mapx=32, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
-    -- add more rooms here...
+    [1] = { mapx=0,  mapy=0, wx=0*sw, wy=0, w=20, h=32, spawnx=3, spawny=13 },
+    [2] = { mapx=20, mapy=0, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [3] = { mapx=20, mapy=0, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
   }
 
   for i = 1, #rooms do
@@ -184,13 +193,18 @@ function apply_skin_by_id(s)
 end
   
 
-function room_px()
-  return room.mapx * tilesize
-end
+-- function room_px()
+--   -- return room.mapx * tilesize
+--   return room.wx * tilesize end
+-- end
 
-function room_py()
-  return room.mapy * tilesize
-end 
+-- function room_py()
+--   -- return room.mapy * tilesize
+--   return room.wy * tilesize end
+-- end 
+
+function room_px() return room.wx * tilesize end
+function room_py() return room.wy * tilesize end
 
 function set_room(id)
   room_id = id
@@ -212,6 +226,8 @@ function enter_room(id, side)
   local old_ry = room_py()
 
   set_room(id)
+
+  -- room.mapx = rooms[id].mapx + 16
 
   local new_rx = room_px()
   local new_ry = room_py()
@@ -676,8 +692,8 @@ function game_draw()
 
   draw_rain()
 
-  local rx = room.mapx * tilesize
-  local ry = room.mapy * tilesize
+  local rx = room_px()
+  local ry = room_py()
 
   for c in all(coins) do
     palt(0,true)    
