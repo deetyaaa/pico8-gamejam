@@ -51,10 +51,14 @@ function _init()
   player.jumps_left = 0
   player.air_grant = false -- prevents re-granting multiple times in same airtime
 
+  platform_rows = {
+    { 3,  4,  5,     6,  7,  8},
+    {19, 20, 21,    22, 23, 24},
+    {35, 36, 37,    38, 39, 40},
+  }
 
   -- rain
-  rain = {}
-  rain = {}
+  rain = {} 
   rain_sprite = 49
   rain_max = 120
   rain_spawn = 3
@@ -74,17 +78,11 @@ function _init()
   local sw = screensize.width / tilesize  -- 16
   local sh = screensize.height / tilesize -- 16
 
-  -- rooms = {
-  --   [1] = { mapx=0,  mapy=0, w=32, h=32, spawnx=3, spawny=13 },
-  --   [2] = { mapx=16, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
-  --   -- [3] = { mapx=32, mapy=0, w=32, h=32, spawnx=2, spawny=13 },
-  --   -- add more rooms here...
-  -- }
 
   rooms = {
     [1] = { mapx=0,  mapy=0, wx=0*sw, wy=0, w=20, h=32, spawnx=3, spawny=13 },
     [2] = { mapx=20, mapy=0, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
-    [3] = { mapx=20, mapy=0, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [3] = { mapx=0, mapy=0, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
   }
 
   for i = 1, #rooms do
@@ -164,44 +162,26 @@ function apply_skin_by_id(s)
 
   if s==1 then
     -- dj1: BLUE-BLUE
-    pal(bird_top_color,   12)
     pal(bird_bottom_color,12)
-    pal(bird_top_outline,  1)
     pal(bird_bottom_outline, 1)
 
   elseif s==2 then
     -- dj2: BLUE-RED
-    pal(bird_top_color,   12)
-    pal(bird_bottom_color, 8)
-    pal(bird_top_outline,  1)
-    pal(bird_bottom_outline, 2)
-
+    
   elseif s==3 then
     -- sj1: RED-RED
     pal(bird_top_color,    8)
-    -- pal(bird_bottom_color, 8)
     pal(bird_top_outline,  2)
-    -- pal(bird_bottom_outline, 2)
 
   else
     -- sj2: RED-BLUE (skin==4)
     pal(bird_top_color,    8)
-    pal(bird_bottom_color,12)
+    pal(bird_bottom_color, 12)
     pal(bird_top_outline,  2)
     pal(bird_bottom_outline, 1)
   end
 end
   
-
--- function room_px()
---   -- return room.mapx * tilesize
---   return room.wx * tilesize end
--- end
-
--- function room_py()
---   -- return room.mapy * tilesize
---   return room.wy * tilesize end
--- end 
 
 function room_px() return room.wx * tilesize end
 function room_py() return room.wy * tilesize end
@@ -218,6 +198,7 @@ function load_room(id)
   player.y = room.spawny
   player.speed.x = 0
   player.speed.y = 0
+  set_platforms_for_room()
 end
 
 function enter_room(id, side)
@@ -246,6 +227,7 @@ function enter_room(id, side)
   end
 
   updatecollisionbox(player)
+  set_platforms_for_room() 
 end
 
 function update_coins()
@@ -308,6 +290,93 @@ end
 function draw_rain()
   for d in all(rain) do
     spr(rain_sprite, d.x, d.y)
+  end
+end
+
+-- (x, y, w) = tile coords relative to room
+-- v = variant 
+function draw_one_platform(x, y, w, row, variant) 
+  if w <= 0 then return end
+  row = row or 1
+  variant = variant or 1
+
+
+  local set = platform_rows[row] or platform_rows[1]
+  local base = (variant==2) and 4 or 1  -- start index in the 6-pack
+
+  local left = set[base]
+  local mid = set[base+1]
+  local right = set[base+2]
+
+  local rx, ry = room_px(), room_py() -- world origin in pixels
+
+  if w == 1 then
+    -- single-tile platform: just use middle
+    spr(m, rx + x*8, ry + y*8)
+    return
+  end
+
+  -- left
+  spr(left, rx + x*8, ry + y*8)
+
+  -- middle fill
+  for i=1,w-2 do
+    spr(mid, rx + (x+i)*8, ry + y*8)
+  end
+
+  -- right
+  spr(right, rx + (x+w-1)*8, ry + y*8)
+end
+
+function set_platform(x,y,w,row,variant)
+  if w <= 0 then return end
+  row = row or 1
+  variant = variant or 1
+
+  local set = platform_rows[row] or platform_rows[1]
+  local base = (variant == 2) and 4 or 1
+
+  local l = set[base]
+  local m = set[base+1]
+  local r = set[base+2]
+
+  local mx = room.mapx + x
+  local my = room.mapy + y
+
+  if w == 1 then
+    mset(mx, my, m)
+    return
+  end
+
+  mset(mx, my, l)
+  for i=1,w-2 do
+    mset(mx+i, my, m)
+  end
+  mset(mx+w-1, my, r)
+end
+
+function set_platforms_for_room()
+  local list = platforms_by_room[room_id] or {}
+  for p in all(list) do
+    set_platform(p.x, p.y, p.w, p.row, p.var)
+  end
+end
+
+platforms_by_room = {
+  [1] = {
+    {x=2, y=20, w=3},
+    {x=5, y=14, w=6},
+    {x=1, y=10, w=14},
+  },
+  [2] = {
+    {x=1, y=18, w=10},
+  },
+}
+
+function draw_platforms()
+  local list = platforms_by_room[room_id] or {}
+  for p in all(list) do
+    draw_one_platform(p.x, p.y, p.w, p.row, p.var)
   end
 end
 
@@ -701,6 +770,7 @@ function game_draw()
   end
   pal()
 
+  draw_platforms()
 
   local bob = sin(player.bob_t/30) * 0.0002
   local spr_id = player.anim[player.frame]
