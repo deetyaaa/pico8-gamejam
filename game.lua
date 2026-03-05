@@ -83,27 +83,27 @@ function _init()
   local dy = 6
 
   rooms = {
-    -- [1] = { mapx=0,  mapy=26, wx=0*sw, wy=0, w=12, h=5, spawnx=3, spawny=13 },
-    [1] = { mapx=0,  mapy=0-dy, wx=0*sw, wy=0, w=20, h=32, spawnx=3, spawny=13 },
-    [2] = { mapx=0, mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
-    [3] = { mapx=40, mapy=0-dy, wx=2*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [1] = { mapx=21,  mapy=10, wx=0*sw, wy=0, w=16, h=16, spawnx=7, spawny=13 },
+    [2] = { mapx=0,  mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=5 },
+    [3] = { mapx=0, mapy=0-dy, wx=2*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [4] = { mapx=40, mapy=0-dy, wx=3*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
   }
 
   coins_by_room = {
-    -- [1] = {
+    [1] = {
     --   -- {x=12, y=22},
     --   -- {x=13, y=10},
-    -- },
-    [1] = {
+    },
+    [2] = {
       -- {x=12, y=22},
       {x=13, y=10},
     },
-    [2] = {
+    [3] = {
       {x=18, y=10},
       {x=12, y=18},
       -- {x=11, y=15},
     },
-    [3] = {
+    [4] = {
       {x=6, y=13},
     },
   }
@@ -112,17 +112,27 @@ function _init()
     -- [1] = {
 
     -- },
-    [1] = {
+    [2] = {
       {x=8, y=25, w=3, row=2, variant=2},
       {x=10, y=21, w=3},
       {x=5, y=15, w=4},
       {x=18, y=9, w=4},
       {x=13, y=11, w=4, row=4, variant=1},
     },
-    [2] = {
+    [3] = {
       {x=1, y=17, w=10},
+      {x=7, y=24, w=3},
       {x=11, y=21, w=3, row=4, variant=1}
     },
+  }
+
+  npcs_by_room = {
+    [1] = {
+      {id="snaily", x=8, y=13, mirror=false, idle={102, 104}}, -- use OTHER sprites for idle
+    },
+    [2] = {
+      {id="mousy", x=4, y=28, skin=4, mirror=false}
+    }
   }
 
   for i = 1, #rooms do
@@ -229,6 +239,10 @@ function enter_room(id, side)
   elseif side == "left" then
     player.x = room.w - 0.5
   end
+
+  player.onground = false
+  player.jumping = false
+  player.jump_hold = 0
 
   updatecollisionbox(player)
   set_platforms_for_room() 
@@ -384,6 +398,11 @@ function platform_solid_from_top(p, entity, prevy)
   return entity.speed.y >= 0 and prevy <= p.y
 end
 
+function platform_solid_from_bottom(p, entity, prevy)
+  -- collide if moving up & coming from below
+  return entity.speed.y < 0 and prevy >= p.y + 1
+end
+
 function draw_platforms()
   local list = platforms_by_room[room_id] or {}
   for p in all(list) do
@@ -488,6 +507,7 @@ function game_update()
   repaint_clouds()
   update_coins()
   animate(player)
+  update_npcs()
 
   if player.x > room.w and room.right then
     enter_room(room.right, "right")
@@ -627,7 +647,8 @@ function applyphysics(entity)
   
   for i=1,steps do
     local prevy = entity.y
-
+    local prevx = entity.x
+    
     entity.x += speed.x / steps
     entity.y += speed.y / steps
 
@@ -688,7 +709,7 @@ function applyphysics(entity)
       local solid_here = tile.solid and not tile.slope
 
       if tile.cloud then
-        solid_here = (entity.has_boots) and speed.y >= 0 and prevy <= tile.y
+        solid_here = entity.has_boots and speed.y >= 0 and prevy <= tile.y
       end
 
       if solid_here then
@@ -711,9 +732,51 @@ function applyphysics(entity)
 
       local solid_here = true
 
+      if not is_cloud then
+        local b = entity.collision.box.horizontal
+        local pl, pr = p.x, p.x + p.w
+        local pt, pb = p.y, p.y + 1
+
+        if b.right > pl and b.left < pr and b.bottom > pt and b.top < pb then
+          -- resolve based on which side we came from
+          local halfw = entity.collision.size.horizontal.width / 2
+
+          if prevx + halfw <= pl then
+            entity.x = pl - halfw
+          elseif prevx - halfw >= pr then
+            entity.x = pr + halfw
+          else
+            -- fallback: use current motion direction if we spawned inside
+            if speed.x > 0 then
+              entity.x = pl - halfw
+            elseif speed.x < 0 then
+              entity.x = pr + halfw
+            end
+          end
+
+          speed.x = 0
+          updatecollisionbox(entity)
+        end
+
+        if platform_solid_from_bottom(p, entity, prevy) then
+          local b = entity.collision.box.ceiling
+          local pl, pr = p.x, p.x + p.w
+          local pt = p.y + 1  -- underside of platform
+
+          -- if your head overlaps the underside band
+          if b.right > pl and b.left < pr and b.top <= pt and b.bottom > pt - 0.2 then
+            entity.speed.y = 0
+            -- push player down so head is just below platform
+            entity.y = pt + entity.collision.size.vertical.height
+            entity.jumping = false
+            entity.jump_hold = 0
+          end
+        end
+      end
+
       --if boots=true, solid!
       if is_cloud then
-        solid_here = (not entity.has_boots)
+        solid_here = entity.has_boots
       end
 
       if solid_here and platform_solid_from_top(p, entity, prevy) then
@@ -837,8 +900,44 @@ function draw_player()
   pal()
 end
 
-function draw_npc()
+function update_npcs()
+ local npcs = npcs_by_room[room_id] or {}
+  for n in all(npcs) do
+    if player.x < n.x then
+      n.mirror = true
+    elseif player.x > n.x then
+      n.mirror = false
+    end
     
+    if n.idle then
+      n.animframes = (n.animframes or 0) + 1
+      local rate = n.idle_rate or 12
+      n.frame = (flr(n.animframes / rate) % #n.idle) + 1
+    end
+  end
+end
+
+function draw_npcs(list)
+  local npcs = npcs_by_room[room_id] or {}
+  local rx, ry = room_px(), room_py()
+
+  for n in all(npcs) do
+    if (not list) or list[n.id] then
+      -- apply_skin_by_id(n.skin or 1)
+      pal() 
+      palt(13,true)
+      palt(0, false)
+
+      local spr_id = (n.idle and n.idle[n.frame or 1]) or n.spr
+      spr(spr_id, 
+          rx + n.x*8 - 8, 
+          ry + n.y*8 - 16, 
+          2, 2, n.mirror
+      )
+
+      pal()
+    end
+  end
 end
 
 function apply_skin_by_id(s)
@@ -867,25 +966,20 @@ function apply_skin_by_id(s)
 end
 
 function game_draw()
-  
   camera(cam.x, cam.y)
 
-  cls(1)
+  palt()
   palt(0, true)
   palt(13, false)
 
-  -- map(room.mapx, room.mapy, 0, 0, room.w, room.h)
+  cls(1)
   map(room.mapx, room.mapy, room_px(), room_py(), room.w, room.h)
+  
   palt(13, true)
-
   draw_rain()
-
-  local rx = room_px()
-  local ry = room_py()
-
-  draw_coins(rx, ry)
-
+  draw_coins(room_px(), room_py())
   draw_platforms()
+  draw_npcs({snaily=true})
 
   local bob = sin(player.bob_t/30) * 0.0002
   local spr_id = player.anim[player.frame]
@@ -894,16 +988,13 @@ function game_draw()
   palt(13, true)
 
   spr(spr_id,
-    rx + player.x * tilesize - 8,
-    ry + player.y * tilesize - 16 + bob,
+    room_px() + player.x * tilesize - 8,
+    room_py() + player.y * tilesize - 16 + bob,
     2, 2, player.mirror
   )
-  -- draw_player()
 
   pal()
 
-
-  -- palt(7,false)
   camera()
   print( coin_count, 13, 5, 7)
   spr(34, 3, 3)
