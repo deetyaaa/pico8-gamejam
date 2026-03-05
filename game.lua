@@ -83,13 +83,17 @@ function _init()
   local dy = 6
 
   rooms = {
+    -- [1] = { mapx=0,  mapy=26, wx=0*sw, wy=0, w=12, h=5, spawnx=3, spawny=13 },
     [1] = { mapx=0,  mapy=0-dy, wx=0*sw, wy=0, w=20, h=32, spawnx=3, spawny=13 },
-    [2] = { mapx=20, mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
-    [3] = { mapx=40, mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [2] = { mapx=0, mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [3] = { mapx=40, mapy=0-dy, wx=2*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
   }
 
   coins_by_room = {
-    
+    -- [1] = {
+    --   -- {x=12, y=22},
+    --   -- {x=13, y=10},
+    -- },
     [1] = {
       -- {x=12, y=22},
       {x=13, y=10},
@@ -105,6 +109,9 @@ function _init()
   }
 
   platforms_by_room = {
+    -- [1] = {
+
+    -- },
     [1] = {
       {x=8, y=25, w=3, row=2, variant=2},
       {x=10, y=21, w=3},
@@ -168,14 +175,8 @@ end
 function room_px() return room.wx * tilesize end
 function room_py() return room.wy * tilesize end
 
-function is_cloud_sprite(s)
-  local set = platform_rows[4]
-  if not set then return false end
-  for i=1,#set do
-    if s == set[i] then return true end
-  end
-  return false
-end
+
+-------------------------------------------------------------------------
 
 
 function start_game()
@@ -188,8 +189,6 @@ function start_game()
 
   load_room(1)
 end
-
-
 
 function set_room(id)
   room_id = id
@@ -235,6 +234,9 @@ function enter_room(id, side)
   set_platforms_for_room() 
 end
 
+-------------------------------------------------------------------------
+
+
 function update_coins()
   -- use the player's "horizontal" body box (good general hitbox)
   local list = coins_by_room and coins_by_room[room_id] or {}
@@ -268,6 +270,9 @@ function draw_coins(rx, ry)
   end
   pal()
 end
+
+-------------------------------------------------------------------------
+
 
 function update_rain()
   -- spawn from top + left so the diagonal flow fills the screen
@@ -308,6 +313,9 @@ function draw_rain()
   end
 end
 
+-------------------------------------------------------------------------
+
+
 -- (x, y, w) = tile coords relative to room
 -- v = variant 
 function draw_one_platform(x, y, w, row, variant) 
@@ -343,39 +351,12 @@ function draw_one_platform(x, y, w, row, variant)
   spr(right, rx + (x+w-1)*8, ry + y*8)
 end
 
-function set_platform(x,y,w,row,variant)
-  if w <= 0 then return end
-  row = row or 1
-  variant = variant or 1
-
-  local set = platform_rows[row] or platform_rows[1]
-  local base = (variant == 2) and 4 or 1
-
-  local l = set[base]
-  local m = set[base+1]
-  local r = set[base+2]
-
-  local mx = room.mapx + x
-  local my = room.mapy + y
-
-  if w == 1 then
-    mset(mx, my, m)
-    return
-  end
-
-  mset(mx, my, l)
-  for i=1,w-2 do
-    mset(mx+i, my, m)
-  end
-  mset(mx+w-1, my, r)
-end
 
 function set_platforms_for_room()
   local list = platforms_by_room[room_id] or {}
   for p in all(list) do
     p.flash = 0
     p._lastv = nil
-    set_platform(p.x, p.y, p.w, p.row, p.variant)
   end
 end
 
@@ -398,7 +379,10 @@ function player_on_platform(p)
     and player.x < p.x + p.w
 end
 
-
+function platform_solid_from_top(p, entity, prevy)
+  -- only collide if falling and coming from above
+  return entity.speed.y >= 0 and prevy <= p.y
+end
 
 function draw_platforms()
   local list = platforms_by_room[room_id] or {}
@@ -409,6 +393,15 @@ function draw_platforms()
     end
     draw_one_platform(p.x, p.y, p.w, p.row, v)
   end
+end
+
+function is_cloud_sprite(s)
+  local set = platform_rows[4]
+  if not set then return false end
+  for i=1,#set do
+    if s == set[i] then return true end
+  end
+  return false
 end
 
 function repaint_clouds()
@@ -423,25 +416,15 @@ function repaint_clouds()
         p.flash = 0
       end
 
-      local touched = player_touches_platform(p)
-      local stood   = player_on_platform(p)
-
-      -- boots=true: NOT solid, but touching should flash
-      -- boots=false: (your collisions already handle solidity) touching/standing should flash too
-      if touched or stood then
-        p.flash = 30 -- 0.5 seconds
-      end
-
-      local v = (p.flash > 0) and 2 or 1
-
-      -- write to map so it visually changes even under map()
-      if p._lastv ~= v then
-        set_platform(p.x, p.y, p.w, p.row, v)
-        p._lastv = v
+      if player_touches_platform(p) or player_on_platform(p) then
+        p.flash = 30
       end
     end
   end
 end
+
+-------------------------------------------------------------------------
+
 
 function game_update()
   player.speed.x = 0
@@ -721,6 +704,34 @@ function applyphysics(entity)
       end
     end
 
+    local list = platforms_by_room[room_id] or {}
+    for p in all(list) do
+      local row = p.row or 1
+      local is_cloud = (row == 4)
+
+      local solid_here = true
+
+      --if boots=true, solid!
+      if is_cloud then
+        solid_here = (not entity.has_boots)
+      end
+
+      if solid_here and platform_solid_from_top(p, entity, prevy) then
+        -- overlap with entity floor box
+        local b = entity.collision.box.floor
+        local pl, pr = p.x, p.x + p.w
+        local py = p.y
+
+        if b.right > pl and b.left < pr and b.bottom >= py and b.top < py + 0.2 then
+          entity.speed.y = 0
+          entity.y = py
+          entity.onground = true
+          if not wasonground then entity.just_landed = true end
+          fallingframes = 0
+        end
+      end
+    end
+
     updatecollisionbox(entity)
 
     -- ceiling collisions (ignore clouds)
@@ -733,7 +744,8 @@ function applyphysics(entity)
     end
   end
 end
-  -- gets all tiles that might be intersecting entity's collision box
+
+-- gets all tiles that might be intersecting entity's collision box
 function gettiles(entity, boxtype)
   local box = entity.collision.box[boxtype]
   local left, top, right, bottom =
@@ -805,6 +817,8 @@ function updatecollisionbox(entity)
   }
 end
 
+-------------------------------------------------------------------------
+
   
 function draw_player()
   local rx = room_px()
@@ -821,6 +835,10 @@ function draw_player()
   )
   
   pal()
+end
+
+function draw_npc()
+    
 end
 
 function apply_skin_by_id(s)
