@@ -84,7 +84,7 @@ function _init()
 
   rooms = {
     [1] = { mapx=21,  mapy=10, wx=0*sw, wy=0, w=16, h=16, spawnx=7, spawny=13 },
-    [2] = { mapx=0,  mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=5 },
+    [2] = { mapx=0,  mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
     [3] = { mapx=0, mapy=0-dy, wx=2*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
     [4] = { mapx=40, mapy=0-dy, wx=3*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
   }
@@ -219,6 +219,7 @@ function enter_room(id, side)
 
   local old_rx = room_px()
   local old_ry = room_py()
+  local old_mapy = room.mapy 
 
   set_room(id)
 
@@ -236,9 +237,21 @@ function enter_room(id, side)
 
   if side == "right" then
     player.x = 0.5
+    -- player.y = room.spawny
+    -- player.y = min(1, player.y, room.h - 1.5)
   elseif side == "left" then
     player.x = room.w - 0.5
+    -- player.y = room.spawny
+    -- player.y = min(1, player.y, room.h - 1.5)
   end
+
+  -- if player.y >= room.h then
+  --   player.y = room.h - 1
+  -- end
+
+  player.y = (old_mapy + player.y) - room.mapy
+
+
 
   player.onground = false
   player.jumping = false
@@ -882,23 +895,6 @@ end
 
 -------------------------------------------------------------------------
 
-  
-function draw_player()
-  local rx = room_px()
-  local ry = room_py()
-  local bob = sin(player.bob_t/30) * 0.0002
-  local spr_id = player.anim[player.frame]
-
-  palt(13, true)
-
-  spr(spr_id,
-    rx + player.x * tilesize - 8,
-    ry + player.y * tilesize - 16 + bob,
-    2, 2, player.mirror
-  )
-  
-  pal()
-end
 
 function update_npcs()
  local npcs = npcs_by_room[room_id] or {}
@@ -925,6 +921,7 @@ function draw_npcs(list)
     if (not list) or list[n.id] then
       -- apply_skin_by_id(n.skin or 1)
       pal() 
+      palt()
       palt(13,true)
       palt(0, false)
 
@@ -936,6 +933,7 @@ function draw_npcs(list)
       )
 
       pal()
+      palt()
     end
   end
 end
@@ -981,7 +979,11 @@ function game_draw()
   draw_platforms()
   draw_npcs({snaily=true})
 
-  local bob = sin(player.bob_t/30) * 0.0002
+  local bob = 0
+  if player.anim == player.anims.standing then
+    bob = sin(player.bob_t/30) * 0.0002
+  end
+
   local spr_id = player.anim[player.frame]
 
   apply_skin_by_id(skin)
@@ -989,7 +991,7 @@ function game_draw()
 
   spr(spr_id,
     room_px() + player.x * tilesize - 8,
-    room_py() + player.y * tilesize - 16 + bob,
+    room_py() + player.y * tilesize - 15 - bob,
     2, 2, player.mirror
   )
 
