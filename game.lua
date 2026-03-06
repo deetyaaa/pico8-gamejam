@@ -86,7 +86,7 @@ function _init()
     [1] = { mapx=21,  mapy=10, wx=0*sw, wy=0, w=16, h=16, spawnx=7, spawny=13 },
     [2] = { mapx=0,  mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
     [3] = { mapx=0, mapy=0-dy, wx=2*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
-    [4] = { mapx=40, mapy=0-dy, wx=3*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [4] = { mapx=0, mapy=0-dy, wx=3*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
   }
 
   coins_by_room = {
@@ -102,6 +102,7 @@ function _init()
       {x=18, y=10},
       {x=12, y=18},
       -- {x=11, y=15},
+      {x=14, y=11},
     },
     [4] = {
       {x=6, y=13},
@@ -116,14 +117,30 @@ function _init()
       {x=8, y=25, w=3, row=2, variant=2},
       {x=10, y=21, w=3},
       {x=5, y=15, w=4},
-      {x=18, y=9, w=4},
       {x=13, y=11, w=4, row=4, variant=1},
+      {x=18, y=9, w=4},
+      -- {x=24, y=9, w=4},
     },
     [3] = {
-      {x=1, y=17, w=10},
-      {x=7, y=24, w=3},
-      {x=11, y=21, w=3, row=4, variant=1}
+      --upper
+      {x=-1, y=9, w=4},
+      {x=5, y=8, w=3},
+      {x=13, y=6, w=3},
+      {x=18, y=6, w=3},
+
+      --cloud route
+      {x=5, y=16, w=4},
+      {x=8, y=24, w=3},
+      {x=10, y=18, w=3, row=4, variant=1},
+      {x=14, y=21, w=3, row=4, variant=1},
+      {x=14, y=15, w=3, row=4, variant=1},
     },
+    [4] = {
+      --upper
+      {x=-1, y=6, w=4},
+
+      --lower
+    }
   }
 
   npcs_by_room = {
