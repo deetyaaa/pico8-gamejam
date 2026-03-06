@@ -8,8 +8,6 @@ function lerp(v0, v1, t)
 end
 
 function _init()
-
-  music(0)
   tilesize = 8
 
   skin = 1
@@ -96,11 +94,11 @@ function _init()
   local dy = 6
 
   rooms = {
-    [1] = { mapx=21,  mapy=10, wx=0*sw, wy=0, w=16, h=16, spawnx=7, spawny=50},
+    [1] = { mapx=21,  mapy=10, wx=0*sw, wy=0, w=16, h=16, spawnx=7, spawny=13  },
     [2] = { mapx=0,  mapy=0-dy, wx=1*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
-    [3] = { mapx=0, mapy=0-dy, wx=2*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
-    [4] = { mapx=0, mapy=0-dy, wx=3*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
-    [5] = { mapx=0, mapy=0-dy, wx=4*sw, wy=0, w=20, h=32, spawnx=2, spawny=13 },
+    [3] = { mapx=0, mapy=0-dy, wx=2*sw, wy=0, w=20, h=32, spawnx=2, spawny=13  },
+    [4] = { mapx=0, mapy=0-dy, wx=3*sw, wy=0, w=20, h=32, spawnx=2, spawny=13  },
+    [5] = { mapx=0, mapy=0-dy, wx=4*sw, wy=0, w=20, h=32, spawnx=2, spawny=13  },
   }
 
   coins_by_room = {
@@ -110,6 +108,7 @@ function _init()
     },
     [2] = {
       -- {x=12, y=22},
+      {x=6, y=12},
       {x=11, y=17},
       {x=14, y=9},
     },
@@ -117,10 +116,12 @@ function _init()
       {x=18, y=10},
       -- {x=12, y=18},
       -- {x=11, y=15},
-      {x=14, y=11},
+      -- {x=14, y=11},
+      {x=15, y=20}
     },
     [4] = {
-      {x=6, y=13},
+      -- {x=6, y=13},
+      {x=7, y=12}
     },
   }
 
@@ -131,7 +132,7 @@ function _init()
     [2] = {
       {x=8, y=25, w=3, row=2, variant=2},
       {x=10, y=21, w=3},
-      {x=5, y=15, w=4},
+      {x=4, y=15, w=5},
       {x=13, y=11, w=4, row=4, variant=1},
       {x=18, y=9, w=4},
       -- {x=24, y=9, w=4},
@@ -158,8 +159,13 @@ function _init()
       {x=15, y=10, w=4},
       
 
-      --lower
+      --mid
       {x=-1, y=16, w=4},
+      {x=6, y=14, w=3},
+
+      --lower
+      {x=8, y=25, w=5, row=2, variant=2},
+      {x=3, y=21, w=3},
     }
   }
 
@@ -994,6 +1000,7 @@ function can_interact(n)
   return (dx*dx + dy*dy) <= interact_r*interact_r
 end
 
+local talked_hat = false
 
 function talk_snaily(n)
   local function end_dialogue()
@@ -1002,17 +1009,38 @@ function talk_snaily(n)
   end
 
   local function snaily_sell_menu()
-    local opts = {
-      {
+    local opts = {}
+      
+    if not player.has_boots then
+      add(opts, {
         label="puddle boots",
         next=function()
           start_dialogue_node({
-            text="actually... i lied. i lost the hat out in the storm.. wanted to test it out but it flew right off my head. if you find it, i could reinforce it for ya",
-            opts={{label="ok", next=end_dialogue}}
+            text="i could let these go for 5 coins",
+            opts={
+              {
+                label="buy boots              (i have "..coin_count.." coins)",
+                next=function()
+                  if coin_count >= 5 then
+                      coin_count -= 5
+                      player.has_boots = true
+                      start_dialogue_node({
+                        text="nice! now you can step on clouds",
+                        opts={{label="thanks", next=end_dialogue}}
+                      })
+                  else
+                      start_dialogue_node({
+                        text="bruh why u so broke.",
+                        opts={{label="ok", next=end_dialogue}}
+                      })
+                  end
+                end
+              }
+            }
           })
         end
-      }
-    }
+      })
+    end    
 
     if not player.has_hat then
       add(opts, {
@@ -1020,18 +1048,18 @@ function talk_snaily(n)
         next=function()
           if player.carrying_hat then
             start_dialogue_node({
-              text="oh snap, you found it. i can fix it up for 20 coins.",
+              text="oh snap, you found it. i can fix it up for 10 coins.",
               opts={
                 {
                   label="buy repair              (i have "..coin_count.." coins)",
                   next=function()
-                    if coin_count >= 20 then
-                      coin_count -= 20
+                    if coin_count >= 10 then
+                      coin_count -= 10
                       player.carrying_hat = false
                       player.has_hat = true
                       hat_item.repaired = true
                       start_dialogue_node({
-                        text="good as new. try not to lose it again.",
+                        text="good as new. try not to lose it like i did.",
                         opts={{label="bye", next=end_dialogue}}
                       })
                     else
@@ -1045,9 +1073,18 @@ function talk_snaily(n)
                 {label="nah", next=end_dialogue}
               }
             })
+
+          elseif not player.carrying_hat and not talked_hat then
+            start_dialogue_node({
+              text="actually... i lied. i lost the hat out in the storm.. wanted to test it out but it flew right off my head. if you find it, i could reinforce it for ya",
+              opts={{label="ok", next=end_dialogue}}
+            })
+            talked_hat = true
+
           else
             start_dialogue_node({
-              text="i can't sell ya one right now. if you find the busted hat out there, i can repair it for 20 coins.",
+              text="i can't sell ya one right now. if you find the busted hat out there, i can repair it for 10 coins.",
+            
               opts={{label="ok", next=end_dialogue}}
             })
           end
@@ -1085,12 +1122,12 @@ function talk_snaily(n)
               })
             elseif player.carrying_hat then
               start_dialogue_node({
-                text="you found it. i can repair it for 20 coins.",
+                text="you found it. i can repair it for 10 coins.",
                 opts={{label="ok", next=end_dialogue}}
               })
             else
               start_dialogue_node({
-                text="lost it out in the storm, remember? bring it back and i'll fix it for 20 coins.",
+                text="lost it out in the storm, remember? bring it back and i'll fix it for 10 coins.",
                 opts={{label="ok", next=end_dialogue}}
               })
             end
@@ -1149,8 +1186,17 @@ function talk_mousy(n)
           label="where's town",
           next=function()
             start_dialogue_node({
-              text="back to the left. just head left and you'll make it back.",
+              text="just head left and you'll make it back.",
               opts={{label="thanks", next=end_dialogue}}
+            })
+          end
+        },
+        {
+          label="any tips?",
+          next=function()
+            start_dialogue_node({
+              text="i head someone talking about a treasure chest in these parts. i'd look for it myself, but i'm too scared.",
+              opts={{label="oooo", next=end_dialogue}}
             })
           end
         }
@@ -1180,7 +1226,7 @@ function talk_mousy(n)
                           n.talked_to = true
                           start_dialogue_node({
                             text="cause i'm not blue and i can't double jump, duh",
-                            opts={{label="oh, well duh", next=end_dialogue}}
+                            opts={{label="oh well duh", next=end_dialogue}}
                           })
                         end
                       },
@@ -1194,23 +1240,10 @@ function talk_mousy(n)
                   })
                 end
               },
-              {
-                label="thanks",
-                next=function()
-                  end_dialogue()
-                end
-              }
             }
           })
         end
       },
-      {
-        label="thanks",
-        next=function()
-          end_dialogue()
-          n.talked_to = false
-        end
-      }
     }
   })
 end
@@ -1403,7 +1436,12 @@ end
 function apply_skin_by_id(s)
   pal() -- reset first
 
-   if s==1 then
+  if not player.has_boots then
+    pal(3, 9)
+    pal(11, 10)
+  end
+
+  if s==1 then
     -- sj1: RED-RED
     pal(bird_top_color,    8)
     pal(bird_top_outline,  2)
@@ -1523,6 +1561,7 @@ end
 function title_update()
   if btnp(5) then
     start_game()
+    music(0)
     scene="game"
   end
 end
