@@ -50,7 +50,7 @@ function _init()
   player.max_jumps = 1
   player.jumps_left = 0
   player.air_grant = false -- prevents re-granting multiple times in same airtime
-  player.has_boots = false
+  player.has_boots = true
 
   platform_rows = {
     { 3,  4,  5,     6,  7,  8},
@@ -128,10 +128,10 @@ function _init()
 
   npcs_by_room = {
     [1] = {
-      {id="snaily", x=8, y=13, mirror=false, idle={102, 104}}, -- use OTHER sprites for idle
+      {id="snaily", x=5, y=13, mirror=false, idle={102, 104}, on_interact=talk_snaily},
     },
     [2] = {
-      {id="mousy", x=4, y=28, skin=4, mirror=false}
+      {id="mousy", x=4, y=28,  mirror=false,idle={108}, on_interact=talk_mousy} 
     }
   }
 
@@ -150,7 +150,7 @@ function _init()
   coin_pickup_r = 0.6
   
   -- pixels of downward speed applied each frame
-  grav_up   = 0.75 / tilesize   -- gravity while rising
+  grav_up   = 0.75 / tilesize   -- gravity while jumping
   grav_down = 0.8 / tilesize  -- gravity while falling
   maxgrav = 6 / tilesize
   
@@ -158,11 +158,10 @@ function _init()
   movspeed = 1.5 / tilesize
   
   -- jump speed
-  -- jumpspeed = 11 / tilesize
-  jump_v = 7.5 / tilesize       -- initial upward velocity (try 10-12)
+  jump_v = 7.5 / tilesize       -- initial upward velocity
 
-  jump_hold_max = 3      -- extra lift frames while holding jump (try 4-8)
-  jump_cut_mult = 0.45         -- how hard we cut jump on release (0.35-0.7)
+  jump_hold_max = 3      -- extra lift frames while holding jump (between 4-8 is good)
+  jump_cut_mult = 0.45         -- how hard jump stops on release (0.35-0.7)
 
   player.jump_hold = 0
   
@@ -172,10 +171,10 @@ function _init()
   wasjumppressed = false
   
   -- jump grace period
-  jumpgrace = 3 -- number of frames allowed after being on the ground to still jump
+  jumpgrace = 3 -- # of frames allowed after being on the ground to still jump (coyote)
   fallingframes = jumpgrace + 1
   
-  -- screen bounding box beyond which the camera will snap back to the player
+  -- screen bounding box: beyond it, camera snaps back to player
   camerasnap = { left = 40, top = 16, right = screensize.width - 40, bottom = screensize.height - 48 }
   cam = { x = 0, y = 0 }
 
@@ -223,8 +222,6 @@ function enter_room(id, side)
 
   set_room(id)
 
-  -- room.mapx = rooms[id].mapx + 16
-
   local new_rx = room_px()
   local new_ry = room_py()
 
@@ -237,21 +234,12 @@ function enter_room(id, side)
 
   if side == "right" then
     player.x = 0.5
-    -- player.y = room.spawny
-    -- player.y = min(1, player.y, room.h - 1.5)
   elseif side == "left" then
     player.x = room.w - 0.5
-    -- player.y = room.spawny
-    -- player.y = min(1, player.y, room.h - 1.5)
+  
   end
 
-  -- if player.y >= room.h then
-  --   player.y = room.h - 1
-  -- end
-
   player.y = (old_mapy + player.y) - room.mapy
-
-
 
   player.onground = false
   player.jumping = false
@@ -265,14 +253,12 @@ end
 
 
 function update_coins()
-  -- use the player's "horizontal" body box (good general hitbox)
   local list = coins_by_room and coins_by_room[room_id] or {}
   local b = player.collision.box.horizontal
 
   for i =# list, 1, -1 do
     local c = list[i]
 
-    -- coin is a 1x1 tile box in tile coords
     local cl = c.x - coin_margin
     local ct = c.y - coin_margin
     local cr = c.x + 1 + coin_margin
@@ -459,6 +445,23 @@ end
 
 
 function game_update()
+
+  if dialogue.active then
+    update_dialogue()
+    return
+  end
+
+  -- press ❎ to interact with nearest NPC
+  if btnp(5) then
+    local npcs = npcs_by_room[room_id] or {}
+    for n in all(npcs) do
+      if n.on_interact and can_interact(n) then
+        n.on_interact(n)
+        break
+      end
+    end
+  end
+
   player.speed.x = 0
 
   local old_max = player.max_jumps
@@ -895,6 +898,279 @@ end
 
 -------------------------------------------------------------------------
 
+-- defines a radius where player can interact w npc
+interact_r = 2.5
+function can_interact(n) 
+  local dx = (player.x - n.x)
+  local dy = (player.y - n.y)
+  return (dx*dx + dy*dy) <= interact_r*interact_r
+end
+
+-- function on_dialogue_choice(i)
+--   if i==1 then
+--     start_dialogue("snaily", "i'm snaily. i vibe here.", nil)
+--   elseif i==2 then
+--     start_dialogue("snaily", "double-jump when your skin is blue!", nil)
+--   end
+-- end
+
+-- function talk_snaily(n)
+--   -- example: just show a message / start dialogue
+--   dialogue.node = {
+--     -- speaker="snaily",
+--     text="yo! are you okay? why you keep turnin' red?? looks like you got asthma mate", "look, i have some stuff that could help you out in the storm--but for a price."
+--     opts={
+--       {label="whatcha got?", next=function()
+--         start_dialogue("")
+--       end},
+--       {label="any tips?", next=function()
+--         start_dialogue("watch your skin color. blue gives extra jump.")
+--       end},
+--       {label="bye", next=function()
+--         dialogue.active=false
+--       end}
+--     }
+--   }
+--   start_dialogue_node(dialogue.node)
+-- end
+
+function talk_snaily(n)
+  local function end_dialogue()
+    dialogue.active = false
+  end
+
+  local function snaily_sell_menu()
+    start_dialogue_node({
+      text="look, i have some stuff that could help you out in this weather--but for a price.",
+      opts={
+        {
+          label="puddle boots",
+          next=function()
+            start_dialogue_node({
+              text="actually... i lied. i lost the hat out in the storm.. wanted to test it out but it flew right off my head. if you find it, i could reinforce it for ya",
+              opts={
+                {label="ok", next=end_dialogue}
+              }
+            })
+          end
+        },
+        {
+          label="propeller hat",
+          next=function()
+            start_dialogue_node({
+              text="that'll be 20 coins, buddy",
+              opts={
+                {
+                  label="buy                              (i have "..coin_count.." coins)",
+                  next=function()
+                    if coin_count >= 20 then
+                      coin_count -= 20
+                      player.has_hat = true
+                      start_dialogue_node({
+                        text="pleasure doin' business with ya",
+                        opts={{label="bye", next=end_dialogue}}
+                      })
+                    else
+                      start_dialogue_node({
+                        text="come back when you've got enough coins.",
+                        opts={{label="ok", next=end_dialogue}}
+                      })
+                    end
+                  end
+                },
+                {label="nah", next=end_dialogue}
+              }
+            })
+          end
+        },
+        {
+          label="nah",
+          next=function()
+            start_dialogue_node({
+              text="pleasure doin' business with ya",
+              opts={{label="bye", next=end_dialogue}}
+            })
+          end
+        }
+      }
+    })
+  end
+
+  start_dialogue_node({
+    text="yo, are you okay? why you keep turnin' red?? looks like you got asthma mate",
+    opts={
+      {
+        label="not the time for jokes. my best friend went missing, and i can't leave her out there in the storm",
+        next=snaily_sell_menu
+      },
+      {
+        label="idk this wind is making it hard to breathe",
+        next=snaily_sell_menu
+      }
+    }
+  })
+end
+
+function talk_mousy(n)
+  dialogue.node = {
+    text="hey birby! sure is rainy out.. i have some stuff that could help with that?",
+    opts={
+      {label="whatcha got?", next=function()
+        start_dialogue("")
+      end},
+      {label="any tips?", next=function()
+        start_dialogue("watch your skin color. blue gives extra jump.")
+      end},
+      {label="bye", next=function()
+        dialogue.active=false
+      end}
+    }
+  }
+  start_dialogue_node(dialogue.node)
+end
+
+dialogue = {
+  active=false,
+  text="",
+  opts=nil,  
+  sel=1
+}
+
+function start_dialogue_node(node)
+  dialogue.node = node
+  dialogue.active = true
+  dialogue.text = node.text or ""
+  dialogue.opts = {}
+  dialogue.sel = 1
+
+  if node.opts then
+    for opt in all(node.opts) do
+      add(dialogue.opts, opt.label)
+    end
+  end
+end
+
+function start_dialogue(text, opts)
+  dialogue.active=true
+  dialogue.text=text or ""
+  dialogue.opts=opts
+  dialogue.sel=1
+end
+
+function wrap_text(msg, max_px, px_per_char)
+  px_per_char = px_per_char or 4
+  local max_chars = max(1, flr(max_px / px_per_char))
+  local lines = {}
+  local line = ""
+
+  for w in all(split(msg, " ")) do
+    local test = (line=="" and w) or (line.." "..w)
+    if #test > max_chars then
+      if line ~= "" then add(lines, line) end
+      line = w
+    else
+      line = test
+    end
+  end
+
+  if line ~= "" then add(lines, line) end
+  return lines
+end
+
+function update_dialogue()
+  if not dialogue.active then return end
+
+  if dialogue.opts then
+    if btnp(2) then dialogue.sel = max(1, dialogue.sel-1) end
+    if btnp(3) then dialogue.sel = min(#dialogue.opts, dialogue.sel+1) end
+
+    if btnp(5) then
+      on_dialogue_choice(dialogue.sel)
+    end
+  else
+    if btnp(5)then
+      dialogue.active=false
+    end
+  end
+end
+
+function on_dialogue_choice(i)
+  local opt = dialogue.node.opts[i]
+  if opt and opt.next then opt.next() end
+end
+
+
+function draw_dialogue()
+  if not dialogue.active then return end
+
+  local pad=6
+  local x=pad
+  local y=pad
+  local w=128-pad*2
+
+
+  -- estimate width needed by longest option
+  local longest = 0
+  if dialogue.opts then
+    for i=1,#dialogue.opts do
+      longest = max(longest, #dialogue.opts[i])
+    end
+  end
+
+  local opt_w = mid(60, longest * 4 + 12, 96)
+  local ox = 128 - 6 - opt_w
+
+  local gap = (dialogue.opts and 6 or 0)
+  local text_w = w
+
+  -- npc dialogue has softer wrap
+  local lines = wrap_text(dialogue.text, text_w - 8, 4)
+
+  local text_h = #lines * 6
+  local box_h = max(16, text_h + 10)
+  local box_y2 = y + box_h
+
+  rectfill(x, y, x+w, box_y2, 9)
+  rect(x, y, x+w, box_y2, 7)
+
+  local ty = y + 5
+  for l in all(lines) do
+    print(l, x+4, ty, 7)
+    ty += 6
+  end
+
+  if dialogue.opts then
+    local ox = x + w - opt_w
+    local oy = box_y2 + 4
+
+    local wrapped_opts = {}
+    local total_h = 0
+    local opt_pad = 4 
+    local line_h = 6
+
+    for i=1,#dialogue.opts do
+      local prefix = (i==dialogue.sel) and "▶ " or "  "
+      local o_lines = wrap_text(prefix..dialogue.opts[i], opt_w - 8, 4)
+      wrapped_opts[i] = o_lines
+      total_h += #o_lines * line_h + opt_pad
+    end
+
+    rectfill(ox, oy, ox + opt_w, oy + total_h + opt_pad*2, 1)
+    rect(ox, oy, ox + opt_w, oy + total_h + opt_pad*2, 7)
+
+    local cy = oy + opt_pad
+    for i = 1, #wrapped_opts do
+      for l in all(wrapped_opts[i]) do
+        print(l, ox + 3, cy, 7)
+        cy += line_h
+      end
+      if i < #wrapped_opts then
+        cy += opt_pad
+      end
+    end
+  end
+end
+---------------------------------------------------
 
 function update_npcs()
  local npcs = npcs_by_room[room_id] or {}
@@ -977,7 +1253,7 @@ function game_draw()
   draw_rain()
   draw_coins(room_px(), room_py())
   draw_platforms()
-  draw_npcs({snaily=true})
+  draw_npcs()
 
   local bob = 0
   if player.anim == player.anims.standing then
@@ -998,6 +1274,19 @@ function game_draw()
   pal()
 
   camera()
+
+  if not dialogue.active then
+    local npcs = npcs_by_room[room_id] or {}
+    for n in all(npcs) do
+      if n.on_interact and can_interact(n) then
+        
+        print("❎ talk", 52, 84, 7)
+        break
+      end
+    end
+  end
+
+  draw_dialogue()
   print( coin_count, 13, 5, 7)
   spr(34, 3, 3)
   palt(0, false)
@@ -1018,7 +1307,7 @@ function _draw()
 end
 
 function title_update()
-  if btnp(4) or btnp(5) then
+  if btnp(5) then
     start_game()
     scene="game"
   end
