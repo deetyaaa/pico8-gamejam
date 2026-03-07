@@ -17,7 +17,8 @@ function _init()
   bird_top_color = 12
   bird_bottom_color = 8
   bird_top_outline = 1
-  bird_bottom_outline = 2
+  bird_bottom_outline = 5
+  
 
 
   player = { x = 3, y = 13 }
@@ -50,14 +51,14 @@ function _init()
   player.max_jumps = 1
   player.jumps_left = 0
   player.air_grant = false -- prevents re-granting multiple times in same airtime
-  player.has_boots = false
+  player.has_boots = true
 
 
-  player.has_hat = false
+  player.has_hat = true
   player.gliding = false
 
-  player.carrying_hat = false
-  hat_item = {room=3,x=2,y=16,spr=15,picked=false,repaired=false}
+  player.carrying_hat = true
+  hat_item = {room=4, x=3, y=6, spr=15, picked=false, repaired=false}
 
   glide_grav = 0.15 / tilesize
   glide_fall_max = 1.2 / tilesize
@@ -68,6 +69,7 @@ function _init()
     {19, 20, 21,    22, 23, 24},
     {35, 36, 37,    38, 39, 40},
     {51, 52, 53,    54, 55, 56},
+    {43, 44, 45,     1, 2, 18}
   }
 
   -- rain
@@ -113,7 +115,10 @@ function _init()
       {x=14, y=9},
     },
     [3] = {
-      {x=18, y=10},
+      {x=6, y=7},
+      {x=10, y=3},
+      {x=14, y=4},
+      {x=18, y=11},
       -- {x=12, y=18},
       -- {x=11, y=15},
       -- {x=14, y=11},
@@ -121,8 +126,12 @@ function _init()
     },
     [4] = {
       -- {x=6, y=13},
+      {x=6, y=7},
       {x=7, y=12}
     },
+    [5] = {
+      
+    }
   }
 
   platforms_by_room = {
@@ -151,21 +160,24 @@ function _init()
       {x=14, y=21, w=3, row=4, variant=1},
       -- {x=5, y=16, w=4},
       -- {x=14, y=15, w=3, row=4, variant=1},
-      {x=17, y=16, w=4},
+      {x=17, y=17, w=4},
     },
     [4] = {
       --upper
-      {x=-1, y=6, w=4},
-      {x=15, y=10, w=4},
+      {x=-1, y=6, w=6},
+      {x=15, y=10, w=6},
       
 
       --mid
-      {x=-1, y=16, w=4},
-      {x=6, y=14, w=3},
+      {x=-1, y=17, w=4},
+      {x=6, y=15, w=2},
 
       --lower
       {x=8, y=25, w=5, row=2, variant=2},
       {x=3, y=21, w=3},
+    },
+    [5] = {
+      {x=-1, y=10, w=22, variant=2}
     }
   }
 
@@ -175,8 +187,40 @@ function _init()
     },
     [2] = {
       {id="mousy", x=4, y=28,  mirror=false,idle={108}, color=2, on_interact=talk_mousy} 
+    },
+    [5] = {
+      {id="girl", x=18, y=10, mirror=false, idle={76}, color=8, on_interact=talk_girl}
     }
   }
+
+  signs = {
+    [1] = {{x=13, y=11, flip=false}},
+    [2] = {{x=17, y=27, flip=false}},
+    [3] = {
+      {x=17, y=27, flip=false},
+      {x=5,y=6, flip=false}
+    },
+    [4] = {
+      {x=4,y=4, flip=false},
+      {x=1,y=15, flip=true}
+    },
+  }
+
+  dirt_by_room = {
+    [5] = {}
+  }
+
+  local dirt_choices = {1, 2, 18}
+
+  for y=11,30 do
+    for x=0,rooms[5].w-1 do
+      add(dirt_by_room[5], {
+        x=x,
+        y=y,
+        spr=dirt_choices[flr(rnd(3))+1]
+      })
+    end
+  end
 
   for i = 1, #rooms do
     rooms[i].left  = (i>1) and (i-1) or nil
@@ -250,10 +294,21 @@ end
 
 function load_room(id)
   set_room(id)
+
   player.x = room.spawnx
   player.y = room.spawny
   player.speed.x = 0
   player.speed.y = 0
+
+  player.onground = false
+  player.just_landed = false
+  player.jumping = false
+  player.jump_hold = 0
+  player.gliding = false
+  player.air_grant = false
+  player.jumps_left = 0
+
+  updatecollisionbox(player)
   set_platforms_for_room()
 end
 
@@ -290,6 +345,28 @@ function enter_room(id, side)
 
   updatecollisionbox(player)
   set_platforms_for_room() 
+end
+
+function draw_signs()
+  local rx, ry = room_px(), room_py()
+  local list = signs[room_id] or {}
+
+  palt(13, true)
+
+  for s in all(list) do
+    spr(46, rx + s.x*8, ry + s.y*8, 2, 2, s.flip)
+  end
+
+  pal()
+end
+
+function draw_dirt()
+  local list = dirt_by_room[room_id] or {}
+  local rx, ry = room_px(), room_py()
+
+  for d in all(list) do
+    spr(d.spr, rx + d.x*8, ry + d.y*8)
+  end
 end
 
 -------------------------------------------------------------------------
@@ -371,12 +448,26 @@ end
 
 -------------------------------------------------------------------------
 
+function draw_interact_prompt(wx, wy, label, accent)
+  local tw = #label * 4
+  local tx = wx - tw/2
+  local ty = wy - 10
+  local pad = 4
+  rectfill(tx-pad, ty-pad, tx+tw+pad, ty+6, 7)
+  rect(tx-pad, ty-pad, tx+tw+pad, ty+6, accent or 0)
+  print(label, tx, ty, accent or 0)
+end
+
 function can_pick_hat()
-  if hat_item.picked or room_id ~= hat_item.room then return false end
+  if not hat_item or hat_item.picked or room_id ~= hat_item.room then
+    return false
+  end
+
   local dx = player.x - hat_item.x
   local dy = player.y - hat_item.y
-  return dx*dx + dy*dy <= 2*2
+  return (dx*dx + dy*dy) <= interact_r*interact_r
 end
+
 
 function update_hat_item()
   if can_pick_hat() and btnp(5) and not dialogue.active then
@@ -386,9 +477,11 @@ function update_hat_item()
 end
 
 function draw_hat_item()
-  if not hat_item.picked and room_id == hat_item.room then
-    palt(0,true)
-    spr(hat_item.spr, room_px()+hat_item.x*8-8, room_py()+hat_item.y*8-8, 2, 1)
+  if hat_item and not hat_item.picked and room_id == hat_item.room then
+    pal()
+    palt(0, true)
+    palt(13, true)
+    spr(hat_item.spr or 15, room_px() + hat_item.x*8 - 8, room_py() + hat_item.y*8 - 8, 2, 1)
   end
 end
 
@@ -600,12 +693,22 @@ function game_update()
   update_npcs()
   update_hat_item()
 
-  if player.x > room.w and room.right then
-    enter_room(room.right, "right")
+  if player.x > room.w then
+    if room.right then
+      enter_room(room.right, "right")
+    else
+      player.x = room.w
+      player.speed.x = 0
+    end
   end
 
-  if player.x < 0 and room.left then
-    enter_room(room.left, "left")
+  if player.x < 0 then
+    if room.left then
+      enter_room(room.left, "left")
+    else
+      player.x = 0
+      player.speed.x = 0
+    end
   end
   
   wasjumppressed = btn(4)
@@ -634,6 +737,8 @@ function game_update()
     local center = py - screensize.height / 2
     cam.y += (center - cam.y) / 6
   end
+
+  
 
 
   local mincamx = room_px()
@@ -834,63 +939,16 @@ function applyphysics(entity)
         fallingframes = 0
       end
     end
-
+    
     local list = platforms_by_room[room_id] or {}
     for p in all(list) do
       local row = p.row or 1
       local is_cloud = (row == 4)
 
-      local solid_here = true
+      local solid_here = not is_cloud or entity.has_boots
 
-      if not is_cloud then
-        local b = entity.collision.box.horizontal
-        local pl, pr = p.x, p.x + p.w
-        local pt, pb = p.y, p.y + 1
-
-        if b.right > pl and b.left < pr and b.bottom > pt and b.top < pb then
-          -- resolve based on which side we came from
-          local halfw = entity.collision.size.horizontal.width / 2
-
-          if prevx + halfw <= pl then
-            entity.x = pl - halfw
-          elseif prevx - halfw >= pr then
-            entity.x = pr + halfw
-          else
-            -- fallback: use current motion direction if we spawned inside
-            if speed.x > 0 then
-              entity.x = pl - halfw
-            elseif speed.x < 0 then
-              entity.x = pr + halfw
-            end
-          end
-
-          speed.x = 0
-          updatecollisionbox(entity)
-        end
-
-        if platform_solid_from_bottom(p, entity, prevy) then
-          local b = entity.collision.box.ceiling
-          local pl, pr = p.x, p.x + p.w
-          local pt = p.y + 1  -- underside of platform
-
-          -- if your head overlaps the underside band
-          if b.right > pl and b.left < pr and b.top <= pt and b.bottom > pt - 0.2 then
-            entity.speed.y = 0
-            -- push player down so head is just below platform
-            entity.y = pt + entity.collision.size.vertical.height
-            entity.jumping = false
-            entity.jump_hold = 0
-          end
-        end
-      end
-
-      --if boots=true, solid!
-      if is_cloud then
-        solid_here = entity.has_boots
-      end
-
+      -- only collide from the top
       if solid_here and platform_solid_from_top(p, entity, prevy) then
-        -- overlap with entity floor box
         local b = entity.collision.box.floor
         local pl, pr = p.x, p.x + p.w
         local py = p.y
@@ -900,6 +958,10 @@ function applyphysics(entity)
           entity.y = py
           entity.onground = true
           if not wasonground then entity.just_landed = true end
+          entity.air_grant = false
+          entity.jumps_left = entity.max_jumps - 1
+          entity.jumping = false
+          entity.jump_hold = 0
           fallingframes = 0
         end
       end
@@ -1000,6 +1062,92 @@ function can_interact(n)
   return (dx*dx + dy*dy) <= interact_r*interact_r
 end
 
+function talk_girl(n)
+  local function end_dialogue()
+    dialogue.active = false
+    n.talked_to = true
+  end
+
+  if n.talked_to then
+    start_dialogue_node({
+      accent=n.color,
+      text="you really came all this way for me?",
+      opts={
+        {
+          label="of course i did",
+          next=function()
+            start_dialogue_node({
+              accent=n.color,
+              text="good. because i was kinda hoping you would.",
+              opts={{label="♡", next=end_dialogue}}
+            })
+          end
+        },
+        {
+          label="are you okay now?",
+          next=function()
+            start_dialogue_node({
+              accent=n.color,
+              text="i am now. i'm still cold, but... a lot less scared with you here.",
+              opts={{label="let's go home", next=end_dialogue}}
+            })
+          end
+        }
+      }
+    })
+    return
+  end
+
+  start_dialogue_node({
+    accent=n.color,
+    text="you found me... i knew you'd come.",
+    opts={
+      {
+        label="i was so worried about you",
+        next=function()
+          start_dialogue_node({
+            accent=n.color,
+            text="i'm okay. i got turned around in the storm and everything looked the same... but i kept thinking about you.",
+            opts={
+              {
+                label="i couldn't stop thinking about you either",
+                next=function()
+                  start_dialogue_node({
+                    accent=n.color,
+                    text="really? ...that's good, because i like you. like, not just friend-like.",
+                    opts={
+                      {
+                        label="i like you too",
+                        next=function()
+                          start_dialogue_node({
+                            accent=n.color,
+                            text="hehe... okay. then let's get outta here together, dummy.",
+                            opts={{label="♡", next=end_dialogue}}
+                          })
+                        end
+                      },
+                      {
+                        label="you have no idea how long i've wanted to hear that",
+                        next=function()
+                          start_dialogue_node({
+                            accent=n.color,
+                            text="then quit staring and help me home already.",
+                            opts={{label="deal", next=end_dialogue}}
+                          })
+                        end
+                      }
+                    }
+                  })
+                end
+              }
+            }
+          })
+        end
+      }
+    }
+  })
+end
+
 local talked_hat = false
 
 function talk_snaily(n)
@@ -1013,10 +1161,11 @@ function talk_snaily(n)
       
     if not player.has_boots then
       add(opts, {
-        label="puddle boots",
+        label="cloud boots",
         next=function()
           start_dialogue_node({
-            text="i could let these go for 5 coins",
+            accent=n.color,
+            text="these let you step on cloud platforms! i could let these go for 5 coins.",
             opts={
               {
                 label="buy boots              (i have "..coin_count.." coins)",
@@ -1025,16 +1174,28 @@ function talk_snaily(n)
                       coin_count -= 5
                       player.has_boots = true
                       start_dialogue_node({
+                        accent=n.color,
                         text="nice! now you can step on clouds",
                         opts={{label="thanks", next=end_dialogue}}
                       })
                   else
                       start_dialogue_node({
+                        accent=n.color,
                         text="bruh why u so broke.",
                         opts={{label="ok", next=end_dialogue}}
                       })
                   end
                 end
+              },
+              {
+                  label="maybe later",
+                  next=function()
+                    start_dialogue_node({
+                      accent=n.color,
+                      text="no worries. come back if you change your mind.",
+                      opts={{label="bye", next=end_dialogue}}
+                    })
+                  end
               }
             }
           })
@@ -1048,34 +1209,47 @@ function talk_snaily(n)
         next=function()
           if player.carrying_hat then
             start_dialogue_node({
-              text="oh snap, you found it. i can fix it up for 10 coins.",
+              accent=n.color,
+              text="oh snap, you found it. i can fix it up for 5 coins.",
               opts={
                 {
                   label="buy repair              (i have "..coin_count.." coins)",
                   next=function()
-                    if coin_count >= 10 then
-                      coin_count -= 10
+                    if coin_count >= 5 then
+                      coin_count -= 5
                       player.carrying_hat = false
                       player.has_hat = true
                       hat_item.repaired = true
                       start_dialogue_node({
-                        text="good as new. try not to lose it like i did.",
+                        accent=n.color,
+                        text="good as new. now you can hold z in the air to glide. try not to lose it like i did.",
                         opts={{label="bye", next=end_dialogue}}
                       })
                     else
                       start_dialogue_node({
+                        accent=n.color,
                         text="bruh why u so broke.",
                         opts={{label="ok", next=end_dialogue}}
                       })
                     end
                   end
                 },
-                {label="nah", next=end_dialogue}
+                {
+                  label="maybe later",
+                  next=function()
+                    start_dialogue_node({
+                      accent=n.color,
+                      text="no worries. come back if you change your mind.",
+                      opts={{label="bye", next=end_dialogue}}
+                    })
+                  end
+                }
               }
             })
 
           elseif not player.carrying_hat and not talked_hat then
             start_dialogue_node({
+              accent=n.color,
               text="actually... i lied. i lost the hat out in the storm.. wanted to test it out but it flew right off my head. if you find it, i could reinforce it for ya",
               opts={{label="ok", next=end_dialogue}}
             })
@@ -1083,7 +1257,8 @@ function talk_snaily(n)
 
           else
             start_dialogue_node({
-              text="i can't sell ya one right now. if you find the busted hat out there, i can repair it for 10 coins.",
+              accent=n.color,
+              text="i can't sell ya one right now. if you find the busted hat out there, i can repair it for 5 coins.",
             
               opts={{label="ok", next=end_dialogue}}
             })
@@ -1096,13 +1271,15 @@ function talk_snaily(n)
       label="nah",
       next=function()
         start_dialogue_node({
-          text="pleasure doin' business with ya",
+          accent=n.color,
+          text="no worries. come back if you change your mind.",
           opts={{label="bye", next=end_dialogue}}
         })
       end
     })
 
     start_dialogue_node({
+      accent=n.color,
       text="look, i have some stuff that could help you out in this weather--but for a price.",
       opts=opts
     })
@@ -1110,6 +1287,7 @@ function talk_snaily(n)
 
     if n.talked_to then
     start_dialogue_node({
+      accent=n.color,
       text="oh, it's you again. need somethin'?",
       opts={
         {
@@ -1117,17 +1295,44 @@ function talk_snaily(n)
           next=function()
             if player.has_hat then
               start_dialogue_node({
+                accent=n.color,
                 text="you've already got it fixed up, buddy.",
                 opts={{label="bye", next=end_dialogue}}
               })
             elseif player.carrying_hat then
               start_dialogue_node({
-                text="you found it. i can repair it for 10 coins.",
-                opts={{label="ok", next=end_dialogue}}
+                accent=n.color,
+                text="you found it. i can fix it up for 5 coins.",
+                opts={
+                  {
+                    label="buy repair              (i have "..coin_count.." coins)",
+                    next=function()
+                      if coin_count >= 5 then
+                        coin_count -= 5
+                        player.carrying_hat = false
+                        player.has_hat = true
+                        hat_item.repaired = true
+                        start_dialogue_node({
+                          accent=n.color,
+                          text="good as new. now you can hold z in the air to glide.",
+                          opts={{label="bye", next=end_dialogue}}
+                        })
+                      else
+                        start_dialogue_node({
+                          accent=n.color,
+                          text="come back when you've got 5 coins.",
+                          opts={{label="ok", next=end_dialogue}}
+                        })
+                      end
+                    end
+                  },
+                  {label="maybe later", next=end_dialogue}
+                }
               })
             else
               start_dialogue_node({
-                text="lost it out in the storm, remember? bring it back and i'll fix it for 10 coins.",
+                accent=n.color,
+                text="lost it out in the storm, remember? bring it back and i'll fix it for 5 coins.",
                 opts={{label="ok", next=end_dialogue}}
               })
             end
@@ -1148,6 +1353,7 @@ function talk_snaily(n)
   end
 
   start_dialogue_node({
+    accent=n.color,
     text="yo, are you okay? why you keep turnin' red?? looks like you got asthma mate",
     opts={
       {
@@ -1171,12 +1377,14 @@ function talk_mousy(n)
 
   if n.talked_to then
     start_dialogue_node({
+      accent=n.color,
       text="hey again, whats up",
       opts={
         {
           label="why am i switching colors again",
           next=function()
             start_dialogue_node({
+              accent=n.color,
               text="rain weakens you when you're red. when you're blue, you've still got enough strength for an extra jump.",
               opts={{label="thanks", next=end_dialogue}}
             })
@@ -1186,6 +1394,7 @@ function talk_mousy(n)
           label="where's town",
           next=function()
             start_dialogue_node({
+              accent=n.color,
               text="just head left and you'll make it back.",
               opts={{label="thanks", next=end_dialogue}}
             })
@@ -1195,8 +1404,40 @@ function talk_mousy(n)
           label="any tips?",
           next=function()
             start_dialogue_node({
-              text="i head someone talking about a treasure chest in these parts. i'd look for it myself, but i'm too scared.",
-              opts={{label="oooo", next=end_dialogue}}
+              accent=n.color,
+              text="pick a number from 1-3.",
+              opts={
+                {
+                  label="1",
+                  next=function()
+                    start_dialogue_node({
+                      accent=n.color,
+                      text="if you get stuck, go to the town and talk to the snail.",
+                      opts={{label="thanks", next=end_dialogue}}
+                    })
+                  end
+                },
+                {
+                  label="2",
+                  next=function()
+                    start_dialogue_node({
+                      accent=n.color,
+                      text="keep your peepers peeled. some platforms go between screens.",
+                      opts={{label="nice", next=end_dialogue}}
+                    })
+                  end
+                },
+                {
+                  label="3",
+                  next=function()
+                    start_dialogue_node({
+                      accent=n.color,
+                      text="oh uh.. i actually only had two tips.",
+                      opts={{label="oh ok", next=end_dialogue}}
+                    })
+                  end
+                }
+              }
             })
           end
         }
@@ -1206,27 +1447,46 @@ function talk_mousy(n)
   end
 
   start_dialogue_node({
+    accent=n.color,
     text="oh jeepers, it's cold--you're freezing up! you should head back to town, it's to the left.",
     opts={
       {
         label="no i have to go up.. my friend is missing.",
         next=function()
           start_dialogue_node({
+            accent=n.color,
             text="you oughta be careful out there. you know better than anyone that birds lose their strength in rain.",
             opts={
               {
                 label="oh that's why i keep turning red",
                 next=function()
                   start_dialogue_node({
-                    text="exactly. looks like you got some fight in you. you can still get an extra jump in when you're blue",
+                    accent=n.color,
+                    text="exactly. you still got some strength in you. just press z to jump. and you can get an extra jump in when you're blue",
                     opts={
                       {
                         label="why do you even know that??",
                         next=function()
                           n.talked_to = true
                           start_dialogue_node({
+                            accent=n.color,
                             text="cause i'm not blue and i can't double jump, duh",
-                            opts={{label="oh well duh", next=end_dialogue}}
+                            opts={
+                              {
+                                label="oh well duh", 
+                                next=function()
+                                  start_dialogue_node(
+                                    {
+                                      accent=n.color,
+                                      text="anyways come back for some tips", 
+                                      opts={{label="ok", next=end_dialogue}}
+                                    }
+                                  )
+                                end
+                              }
+                            
+                            },
+                            
                           })
                         end
                       },
@@ -1252,7 +1512,8 @@ dialogue = {
   active=false,
   text="",
   opts=nil,  
-  sel=1
+  sel=1,
+  accent=0
 }
 
 function start_dialogue_node(node)
@@ -1261,6 +1522,8 @@ function start_dialogue_node(node)
   dialogue.text = node.text or ""
   dialogue.opts = {}
   dialogue.sel = 1
+  dialogue.accent = node.accent or 0
+
 
   if node.opts then
     for opt in all(node.opts) do
@@ -1277,12 +1540,14 @@ function start_dialogue(text, opts)
 end
 
 function wrap_text(msg, max_px, px_per_char)
+  msg = tostring(msg or "")
   px_per_char = px_per_char or 4
   local max_chars = max(1, flr(max_px / px_per_char))
   local lines = {}
   local line = ""
 
   for w in all(split(msg, " ")) do
+    w = tostring(w)
     local test = (line=="" and w) or (line.." "..w)
     if #test > max_chars then
       if line ~= "" then add(lines, line) end
@@ -1327,6 +1592,7 @@ function draw_dialogue()
   local y=pad
   local w=128-pad*2
 
+  local accent = dialogue.accent or 0
 
   -- estimate width needed by longest option
   local longest = 0
@@ -1349,7 +1615,7 @@ function draw_dialogue()
   local box_h = max(16, text_h + 10)
   local box_y2 = y + box_h
 
-  rectfill(x, y, x+w, box_y2, 9)
+  rectfill(x, y, x+w, box_y2, accent or 0)
   rect(x, y, x+w, box_y2, 7)
 
   local ty = y + 5
@@ -1390,6 +1656,7 @@ function draw_dialogue()
   end
 end
 ---------------------------------------------------
+
 
 function update_npcs()
  local npcs = npcs_by_room[room_id] or {}
@@ -1444,13 +1711,13 @@ function apply_skin_by_id(s)
   if s==1 then
     -- sj1: RED-RED
     pal(bird_top_color,    8)
-    pal(bird_top_outline,  2)
+    pal(bird_top_outline,  5)
 
   elseif s==2 then
     -- sj2: RED-BLUE
     pal(bird_top_color,    8)
     pal(bird_bottom_color, 12)
-    pal(bird_top_outline,  2)
+    pal(bird_top_outline,  5)
     pal(bird_bottom_outline, 1)
 
   elseif s==3 then
@@ -1472,6 +1739,7 @@ function game_draw()
 
   cls(1)
   map(room.mapx, room.mapy, room_px(), room_py(), room.w, room.h)
+  draw_dirt()
   
   palt(13, true)
   draw_rain()
@@ -1479,6 +1747,7 @@ function game_draw()
   draw_platforms()
   draw_npcs()
   draw_hat_item()
+  draw_signs()
 
   local bob = 0
   if player.anim == player.anims.standing then
@@ -1494,23 +1763,23 @@ function game_draw()
     local npcs = npcs_by_room[room_id] or {}
     for n in all(npcs) do
       if n.on_interact and can_interact(n) then
-        local nx = room_px() + n.x*8
-        local ny = room_py() + n.y*8 -5
-        local label = "❎ talk"
-        
-        local tw = #label * 4
-        local tx = (nx - tw/2)-2
-        local ty = ny - 19
-        local pad = 4
-
-        local accent_color = n.color or 0
-
-        rectfill(tx-pad, ty-(pad/2), tx+tw+pad, ty+6, 7) 
-        rect(tx-pad, ty-(pad/2), tx+tw+pad, ty+6, accent_color) 
-
-        print(label, tx, ty, accent_color)
+        draw_interact_prompt(
+          room_px() + n.x*8,
+          room_py() + n.y*8 - 14,
+          "❎ talk",
+          n.color or 0
+        )
         break
       end
+    end
+
+    if can_pick_hat() then
+      draw_interact_prompt(
+        room_px() + hat_item.x*8,
+        room_py() + hat_item.y*8 - 6,
+        "❎ take",
+        4
+      )
     end
   end
 
@@ -1528,7 +1797,8 @@ function game_draw()
     if player.gliding then
       hat_spr = ((flr(player.bob_t / 2) % 2) == 0) and 15 or 31
     end
-    spr(hat_spr, px+7, py - 6, 2, 1, player.mirror)
+    local hat_x = player.mirror and (px+2) or (px+6)
+    spr(hat_spr, hat_x, py - 6, 2, 1, player.mirror)
   end
   pal()
 
@@ -1542,6 +1812,14 @@ function game_draw()
     spr(15, 3, 12, 2, 1)
   end
   palt(0, false)
+
+
+  poke( 0x5f2e, 1 )
+  -- pal(0, 0+128, 1)
+  pal(8, 136, 1)
+  pal(5, 130, 1)
+  -- pal(11, 138, 1)
+  -- pal(3, 139, 1)
 end
 
 -------------------------------------------------------------------------
