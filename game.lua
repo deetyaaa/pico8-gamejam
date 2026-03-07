@@ -51,13 +51,13 @@ function _init()
   player.max_jumps = 1
   player.jumps_left = 0
   player.air_grant = false -- prevents re-granting multiple times in same airtime
-  player.has_boots = true
+  player.has_boots = false
 
 
-  player.has_hat = true
+  player.has_hat = false
   player.gliding = false
 
-  player.carrying_hat = true
+  player.carrying_hat = false
   hat_item = {room=4, x=3, y=6, spr=15, picked=false, repaired=false}
 
   glide_grav = 0.15 / tilesize
@@ -194,8 +194,8 @@ function _init()
   }
 
   signs = {
-    [1] = {{x=13, y=11, flip=false}},
-    [2] = {{x=17, y=27, flip=false}},
+    [1] = {{x=13, y=11, flip=false}, },
+    [2] = {{x=17, y=27, flip=false}, {x=1,y=27, flip=true}},
     [3] = {
       {x=17, y=27, flip=false},
       {x=5,y=6, flip=false}
@@ -283,7 +283,7 @@ function start_game()
   cam.x = 0
   cam.y = 0
 
-  load_room(2)
+  load_room(1)
 end
 
 function set_room(id)
@@ -693,13 +693,19 @@ function game_update()
   update_hat_item()
 
   if player.x > room.w then
-    if room.right then
-      enter_room(room.right, "right")
-    else
+  if room.right then
+    -- block entry into last room unless player is above y=10
+    if room.right == 5 and player.y > 10 then
       player.x = room.w
       player.speed.x = 0
+    else
+      enter_room(room.right, "right")
     end
+  else
+    player.x = room.w
+    player.speed.x = 0
   end
+end
 
   if player.x < 0 then
     if room.left then
@@ -1036,7 +1042,7 @@ function talk_girl(n)
             start_dialogue_node({
               accent=n.color,
               text="good. because i was kinda hoping you would.",
-              opts={{label="♡", next=end_dialogue}}
+              opts={{label="<3", next=end_dialogue}}
             })
           end
         },
@@ -1079,7 +1085,7 @@ function talk_girl(n)
                           start_dialogue_node({
                             accent=n.color,
                             text="hehe... okay. then let's get outta here together, dummy.",
-                            opts={{label="♡", next=end_dialogue}}
+                            opts={{label="<3", next=end_dialogue}}
                           })
                         end
                       },
