@@ -229,7 +229,7 @@ function _init()
 
   -- coins
   coin_sprite = 33
-  coin_margin = 0.1 -- shrinks coin hitbox
+  coin_margin = 0.1 
   
   coin_count = 0
 
@@ -237,8 +237,8 @@ function _init()
   coin_pickup_r = 0.6
   
   -- pixels of downward speed applied each frame
-  grav_up   = 0.75 / tilesize   -- gravity while jumping
-  grav_down = 0.8 / tilesize  -- gravity while falling
+  grav_up   = 0.75 / tilesize   
+  grav_down = 0.8 / tilesize  
   maxgrav = 6 / tilesize
   
   -- horizontal movement speed
@@ -408,7 +408,6 @@ end
 
 
 function update_rain()
-  -- spawn from top + left so the diagonal flow fills the screen
   for i=1,rain_spawn do
     if #rain < rain_max then
       local spd = rain_spd_min + rnd(rain_spd_max - rain_spd_min) -- same for x and y
@@ -505,7 +504,7 @@ function draw_one_platform(x, y, w, row, variant)
   local rx, ry = room_px(), room_py() -- world origin in pixels
 
   if w == 1 then
-    -- single-tile platform: just use middle
+    -- single-tile platform-- just use middle
     spr(mid, rx + x*8, ry + y*8)
     return
   end
@@ -623,20 +622,20 @@ function game_update()
   player.speed.x = 0
 
   local old_max = player.max_jumps
-  player.max_jumps = (skin <= 2 and 1 or 2 )      -- skins 1-2: double jump
+  player.max_jumps = (skin <= 2 and 1 or 2 )      -- double vs single jumps
 
   if player.onground then
-    -- landing resets everything
+    -- landing resets
     player.air_grant = false
     player.jumps_left = player.max_jumps - 1
   else
-    -- if we SWITCH to double-jump while airborne, grant 1 jump (once per airtime)
+    -- if switch to double-jump while airborne, grant 1 jump (once per airtime)
     if player.max_jumps > old_max and not player.air_grant then
       player.jumps_left = max(player.jumps_left, player.max_jumps - 1) -- becomes 1
       player.air_grant = true
     end
 
-    -- if we SWITCH back to single-jump while airborne, clamp to 0
+    -- if switch to single-jump while airborne, clamp to 0
     if player.max_jumps == 1 then
       player.jumps_left = 0
     end
@@ -713,8 +712,6 @@ function game_update()
   
   wasjumppressed = btn(4)
 
-  -- update camera position
-  -- local screenx, screeny = player.x * tilesize - cam.x, player.y * tilesize - cam.y
   local px = room_px() + player.x * tilesize
   local py = room_py() + player.y * tilesize
   local screenx, screeny = px - cam.x, py - cam.y
@@ -767,11 +764,10 @@ function animate(entity)
   end
   
   entity.animframes += 1
-  -- entity.animt += 0.05                    -- bigger = faster flap, smaller = smoother/slower
 
-  local rate = 12          -- standing slower
+  local rate = 12          
   if entity.anim == entity.anims.walking then rate = 6 end
-  if entity.anim == entity.anims.jumping then rate = 2 end  -- faster (shows all jump frames)
+  if entity.anim == entity.anims.jumping then rate = 2 end 
   if entity.anim == entity.anims.gliding then rate = 9999 end
 
   -- end
@@ -818,7 +814,6 @@ function applyphysics(entity)
     entity.gliding = true
     speed.y = min(glide_fall_max, speed.y + glide_grav)
   else
-    -- keep your existing jump/fall code here
     if speed.y < 0 then
       -- rising
       if entity.jumping and btn(4) and entity.jump_hold > 0 then
@@ -826,7 +821,7 @@ function applyphysics(entity)
         speed.y += grav_up
         entity.jump_hold -= 1
       else
-        -- released or out of hold time: cut jump once, then normal rise gravity
+        -- released or out of hold time,, cut jump once, then normal rise gravity
         if entity.jumping and not btn(4) then
           speed.y *= jump_cut_mult
           entity.jump_hold = 0
@@ -841,7 +836,6 @@ function applyphysics(entity)
     end
   end
 
-  -- natural jump physics using velocity + gravity
   
 
   speed.y = min(maxgrav, speed.y)
@@ -869,42 +863,6 @@ function applyphysics(entity)
 
     updatecollisionbox(entity)
 
-    -- slope collisions (only slopes)
-    for tile in gettiles(entity, "floor") do
-      if tile.slope then
-        local tiletop = tile.y
-        local slope = tile.slope
-        local xoffset = entity.x - tile.x
-
-        if xoffset < 0 or xoffset > 1 then
-          tiletop = nil
-        else
-          local alpha = slope.reversed and (1 - xoffset) or xoffset
-          local slopeheight = lerp(slope.offset, slope.offset + slope.height, alpha)
-          tiletop = tile.y + 1 - slopeheight
-
-          -- don't snap upward through slope while jumping
-          if entity.y < tiletop and speed.y < 0 then
-            tiletop = nil
-          end
-        end
-
-        if tiletop then
-          speed.y = 0
-          entity.y = tiletop
-          entity.onground = true
-          if not wasonground then entity.just_landed = true end
-          entity.air_grant = false
-          entity.jumps_left = entity.max_jumps - 1
-          entity.jump_hold = 0
-          entity.jumping = false
-          fallingframes = 0
-        end
-      end
-    end
-
-    updatecollisionbox(entity)
-
     -- wall collisions (ignore clouds)
     for tile in gettiles(entity, "horizontal") do
       if tile.solid and not tile.slope and not tile.cloud then
@@ -919,7 +877,6 @@ function applyphysics(entity)
 
     updatecollisionbox(entity)
 
-    -- floor collisions (clouds are one-way + require boots)
     for tile in gettiles(entity, "floor") do
       local solid_here = tile.solid and not tile.slope
 
@@ -939,7 +896,7 @@ function applyphysics(entity)
         fallingframes = 0
       end
     end
-    
+
     local list = platforms_by_room[room_id] or {}
     for p in all(list) do
       local row = p.row or 1
